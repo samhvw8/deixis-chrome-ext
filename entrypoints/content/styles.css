@@ -1,0 +1,254 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Deixis Annotation Overlay Styles */
+
+/* Base layer - CSS custom properties */
+@layer base {
+  :root {
+    /* Surface colors */
+    --surface-primary: rgba(24, 24, 27, 0.95);
+    --surface-hover: rgba(39, 39, 42, 1);
+    --surface-active: rgba(63, 63, 70, 1);
+
+    /* Border colors */
+    --border-subtle: rgba(63, 63, 70, 0.8);
+    --border-visible: rgba(82, 82, 91, 1);
+
+    /* Text colors */
+    --text-primary: #fafafa;
+    --text-secondary: #a1a1aa;
+    --text-muted: #71717a;
+
+    /* Annotation colors */
+    --anno-green: #22c55e;
+    --anno-red: #ef4444;
+    --anno-blue: #3b82f6;
+    --anno-yellow: #eab308;
+    --anno-orange: #f97316;
+    --anno-purple: #a855f7;
+    --anno-cyan: #06b6d4;
+    --anno-white: #ffffff;
+
+    /* Semantic colors */
+    --success: #22c55e;
+    --warning: #eab308;
+    --error: #ef4444;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+
+    /* Timing */
+    --duration-micro: 150ms;
+    --duration-standard: 200ms;
+    --duration-smooth: 250ms;
+    --ease-smooth: cubic-bezier(0.25, 1, 0.5, 1);
+  }
+}
+
+/* Component layer - reusable component styles */
+@layer components {
+  /* Toolbar container */
+  .deixis-toolbar {
+    @apply flex items-center gap-1 p-2 rounded-lg;
+    background: var(--surface-primary);
+    border: 1px solid var(--border-subtle);
+    box-shadow: var(--shadow-md);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  /* Tool button base */
+  .deixis-tool-btn {
+    @apply relative flex items-center justify-center w-9 h-9 rounded cursor-pointer;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-secondary);
+    transition: all var(--duration-micro) var(--ease-smooth);
+  }
+
+  .deixis-tool-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+  }
+
+  .deixis-tool-btn:active {
+    background: var(--surface-active);
+  }
+
+  .deixis-tool-btn[data-active="true"],
+  .deixis-tool-btn.active {
+    background: var(--surface-active);
+    border-color: var(--border-visible);
+    color: var(--text-primary);
+  }
+
+  .deixis-tool-btn:disabled {
+    color: var(--text-muted);
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  .deixis-tool-btn:focus-visible {
+    outline: 2px solid var(--anno-blue);
+    outline-offset: 2px;
+  }
+
+  /* Divider */
+  .deixis-divider {
+    @apply mx-2;
+    width: 1px;
+    height: 20px;
+    background: var(--border-subtle);
+  }
+
+  /* Color swatch */
+  .deixis-color-swatch {
+    @apply flex items-center justify-center w-5 h-5 rounded-full cursor-pointer;
+    border: 2px solid transparent;
+    transition: transform var(--duration-micro) var(--ease-smooth);
+  }
+
+  .deixis-color-swatch:hover {
+    transform: scale(1.1);
+  }
+
+  .deixis-color-swatch[data-selected="true"],
+  .deixis-color-swatch.selected {
+    border-color: white;
+    box-shadow: 0 0 0 2px var(--surface-primary);
+  }
+
+  /* Color picker button */
+  .deixis-color-picker-btn {
+    @apply relative flex items-center justify-center w-9 h-9 rounded cursor-pointer;
+    background: transparent;
+    border: 1px solid transparent;
+    transition: all var(--duration-micro) var(--ease-smooth);
+  }
+
+  .deixis-color-picker-btn:hover {
+    background: var(--surface-hover);
+  }
+
+  /* Color picker dropdown */
+  .deixis-color-picker-dropdown {
+    @apply absolute top-full left-1/2 mt-2 p-2 rounded-md grid grid-cols-4 gap-1;
+    transform: translateX(-50%);
+    background: var(--surface-primary);
+    border: 1px solid var(--border-subtle);
+    box-shadow: var(--shadow-md);
+    z-index: 10;
+  }
+
+  /* Tooltip */
+  .deixis-tooltip {
+    @apply absolute py-1 px-2 rounded text-xs whitespace-nowrap pointer-events-none;
+    background: var(--surface-primary);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-sm);
+    z-index: 20;
+  }
+
+  /* Toast notification */
+  .deixis-toast {
+    @apply fixed bottom-4 left-1/2 py-3 px-4 rounded-md text-sm font-medium;
+    transform: translateX(-50%);
+    background: var(--surface-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-subtle);
+    box-shadow: var(--shadow-lg);
+    z-index: 50;
+  }
+
+  .deixis-toast[data-success="true"] {
+    border-color: var(--success);
+  }
+
+  .deixis-toast[data-error="true"] {
+    border-color: var(--error);
+  }
+
+  /* Action buttons (Done/Cancel) */
+  .deixis-btn-primary {
+    @apply flex items-center gap-1.5 py-1.5 px-3 rounded text-sm font-medium cursor-pointer;
+    background: var(--anno-green);
+    color: #000;
+    border: none;
+    transition: all var(--duration-micro) var(--ease-smooth);
+  }
+
+  .deixis-btn-primary:hover {
+    filter: brightness(1.1);
+  }
+
+  .deixis-btn-primary:active {
+    filter: brightness(0.95);
+  }
+
+  .deixis-btn-secondary {
+    @apply flex items-center gap-1.5 py-1.5 px-3 rounded text-sm font-medium cursor-pointer;
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-subtle);
+    transition: all var(--duration-micro) var(--ease-smooth);
+  }
+
+  .deixis-btn-secondary:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+    border-color: var(--border-visible);
+  }
+}
+
+/* Utility layer - animation utilities */
+@layer utilities {
+  .animate-toast-in {
+    animation: toast-in var(--duration-standard) var(--ease-smooth);
+  }
+
+  .animate-toast-out {
+    animation: toast-out var(--duration-micro) ease-in forwards;
+  }
+
+  @keyframes toast-in {
+    0% {
+      opacity: 0;
+      transform: translateX(-50%) translateY(8px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  }
+
+  @keyframes toast-out {
+    0% {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    100% {
+      opacity: 0;
+      transform: translateX(-50%) translateY(8px);
+    }
+  }
+
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .deixis-tool-btn,
+    .deixis-color-swatch,
+    .deixis-color-picker-btn,
+    .deixis-btn-primary,
+    .deixis-btn-secondary {
+      transition: none;
+    }
+
+    .animate-toast-in,
+    .animate-toast-out {
+      animation: none;
+    }
+  }
+}

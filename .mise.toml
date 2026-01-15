@@ -1,0 +1,22 @@
+[tools]
+node = "22"
+bun = "latest"
+
+[env]
+NODE_ENV = "development"
+
+[tasks.dev]
+run = "bun run dev"
+description = "Start development server"
+
+[tasks.build]
+run = "bun run build"
+description = "Build extension for production"
+
+[tasks.compile]
+run = "bun run compile"
+description = "Type check the project"
+
+[tasks.zip]
+run = "bun run zip"
+description = "Create extension zip for distribution"
