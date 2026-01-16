@@ -13,8 +13,8 @@
 |---------|--------|-------|
 | Context Menu Entry | Implemented | Right-click "Annotate with Deixis" |
 | Freehand Draw | Implemented | With configurable brush size |
-| Rectangle Tool | Implemented | Outline only |
-| Circle/Ellipse Tool | Implemented | Outline only |
+| Rectangle Tool | Implemented | With optional fill color |
+| Circle/Ellipse Tool | Implemented | With optional fill color |
 | Arrow Tool | Implemented | With arrowhead |
 | Text Label | Implemented | With background color & outline options |
 | Move Tool | Implemented | Drag existing annotations |
@@ -119,8 +119,9 @@ AND the line uses the selected color and brush size
 GIVEN annotation mode is active
 WHEN user selects Rectangle tool and drags on image
 THEN a rectangle appears from start point to end point
-AND rectangle has outline only (no fill)
-AND stroke width matches brush size setting
+AND rectangle has outline with stroke width matching brush size setting
+AND rectangle can optionally have fill color (configurable via fill toggle)
+AND fill color matches the currently selected color when enabled
 ```
 
 #### FR-5: Circle/Ellipse Tool (Hotkey: E)
@@ -128,8 +129,9 @@ AND stroke width matches brush size setting
 GIVEN annotation mode is active
 WHEN user selects Circle tool and drags on image
 THEN an ellipse appears within the drag bounds
-AND ellipse has outline only (no fill)
-AND stroke width matches brush size setting
+AND ellipse has outline with stroke width matching brush size setting
+AND ellipse can optionally have fill color (configurable via fill toggle)
+AND fill color matches the currently selected color when enabled
 ```
 
 #### FR-6: Arrow Tool (Hotkey: A)
@@ -195,7 +197,17 @@ THEN stroke width of subsequent annotations changes accordingly
 AND current brush size is displayed
 ```
 
-#### FR-8b: Text Background Color
+#### FR-8b: Shape Fill Color
+```
+GIVEN rectangle or circle tool is selected
+WHEN user toggles fill color option
+THEN subsequent shape annotations include fill color
+AND fill color uses the currently selected color
+AND fill is applied in addition to the stroke outline
+AND toggle state is preserved while the tool remains selected
+```
+
+#### FR-8c: Text Background Color
 ```
 GIVEN text tool is selected
 WHEN user toggles text background
@@ -203,7 +215,7 @@ THEN text annotations can have semi-transparent background
 AND background color is configurable via color picker
 ```
 
-#### FR-8c: Text Outline
+#### FR-8d: Text Outline
 ```
 GIVEN text tool is selected
 WHEN user enables text outline
