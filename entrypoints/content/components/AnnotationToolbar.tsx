@@ -11,6 +11,7 @@ import {
   TypeIcon,
   EraserIcon,
   UndoIcon,
+  RedoIcon,
   TrashIcon,
   CopyIcon,
   DownloadIcon,
@@ -32,6 +33,10 @@ export interface AnnotationToolbarProps {
   brushSize: number;
   /** Callback when brush size changes */
   onBrushSizeChange: (size: number) => void;
+  /** Opacity 0-1 */
+  opacity: number;
+  /** Callback when opacity changes */
+  onOpacityChange: (opacity: number) => void;
   /** Text background color (null means no background) */
   textBgColor: string | null;
   /** Callback when text background color changes */
@@ -52,6 +57,10 @@ export interface AnnotationToolbarProps {
   canUndo: boolean;
   /** Callback for undo action */
   onUndo: () => void;
+  /** Whether redo is available */
+  canRedo: boolean;
+  /** Callback for redo action */
+  onRedo: () => void;
   /** Whether there are annotations to clear */
   canClear: boolean;
   /** Callback for clear all action */
@@ -90,6 +99,8 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
   onColorChange,
   brushSize,
   onBrushSizeChange,
+  opacity,
+  onOpacityChange,
   textBgColor,
   onTextBgColorChange,
   textOutlineColor,
@@ -100,6 +111,8 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
   onEraserModeChange,
   canUndo,
   onUndo,
+  canRedo,
+  onRedo,
   canClear,
   onClearAll,
   onCopy,
@@ -171,6 +184,15 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
           if (isMeta && !event.shiftKey && canUndo) {
             event.preventDefault();
             onUndo();
+          } else if (isMeta && event.shiftKey && canRedo) {
+            event.preventDefault();
+            onRedo();
+          }
+          break;
+        case 'y':
+          if (isMeta && canRedo) {
+            event.preventDefault();
+            onRedo();
           }
           break;
         case 'escape':
@@ -182,7 +204,7 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onToolChange, onUndo, onCancel, canUndo]);
+  }, [onToolChange, onUndo, onRedo, onCancel, canUndo, canRedo]);
 
   const handleCopy = useCallback(() => {
     onCopy();
@@ -271,6 +293,30 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
             />
             <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', minWidth: 24 }}>
               {brushSize}px
+            </span>
+          </div>
+        )}
+
+        {/* Opacity - shown for all drawing tools */}
+        {['draw', 'rectangle', 'circle', 'arrow', 'text'].includes(selectedTool) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 8 }}>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>Opacity:</span>
+            <input
+              type="range"
+              min="0.1"
+              max="1"
+              step="0.1"
+              value={opacity}
+              onChange={(e) => onOpacityChange(Number(e.target.value))}
+              style={{
+                width: 50,
+                height: 16,
+                cursor: 'pointer',
+              }}
+              title={`Opacity: ${Math.round(opacity * 100)}%`}
+            />
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', minWidth: 28 }}>
+              {Math.round(opacity * 100)}%
             </span>
           </div>
         )}
@@ -429,6 +475,13 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
             shortcut="Ctrl+Z"
             onClick={onUndo}
             disabled={!canUndo}
+          />
+          <ToolButton
+            icon={<RedoIcon />}
+            tooltip="Redo"
+            shortcut="Ctrl+Shift+Z"
+            onClick={onRedo}
+            disabled={!canRedo}
           />
           <ToolButton
             icon={<TrashIcon />}

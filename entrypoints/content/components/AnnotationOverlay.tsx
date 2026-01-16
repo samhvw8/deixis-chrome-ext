@@ -20,6 +20,7 @@ interface Annotation {
   type: AnnotationTool;
   color: string;
   strokeWidth: number;
+  opacity: number;          // Opacity 0-1
   points?: Point[];      // For freehand draw
   start?: Point;         // For shapes
   end?: Point;           // For shapes
@@ -44,11 +45,13 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
   const [selectedTool, setSelectedTool] = useState<AnnotationTool>('draw');
   const [selectedColor, setSelectedColor] = useState(ANNOTATION_COLORS[0].value);
   const [brushSize, setBrushSize] = useState(3);
+  const [opacity, setOpacity] = useState(1);
   const [textBgColor, setTextBgColor] = useState<string | null>('rgba(0, 0, 0, 0.7)');
   const [textOutlineColor, setTextOutlineColor] = useState<string | null>(null);
   const [textOutlineWidth, setTextOutlineWidth] = useState(2);
   const [eraserMode, setEraserMode] = useState<'object' | 'stroke'>('object');
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const [redoStack, setRedoStack] = useState<Annotation[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentAnnotation, setCurrentAnnotation] = useState<Annotation | null>(null);
   const [textInput, setTextInput] = useState<{ visible: boolean; position: Point }>({
@@ -62,6 +65,9 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
 
   // Eraser state
   const [isErasing, setIsErasing] = useState(false);
+
+  // Cursor preview state
+  const [cursorPos, setCursorPos] = useState<Point | null>(null);
 
   // Refs
   const containerRef = useRef<HTMLDivElement>(null);
@@ -133,6 +139,8 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
 
   // Draw a single annotation
   const drawAnnotation = (ctx: CanvasRenderingContext2D, annotation: Annotation) => {
+    ctx.save();
+    ctx.globalAlpha = annotation.opacity;
     ctx.strokeStyle = annotation.color;
     ctx.fillStyle = annotation.color;
     ctx.lineWidth = annotation.strokeWidth;
@@ -204,6 +212,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
         }
         break;
     }
+    ctx.restore();
   };
 
   // Draw arrow with head
@@ -475,6 +484,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       type: selectedTool,
       color: selectedColor,
       strokeWidth: brushSize,
+      opacity: opacity,
       points: selectedTool === 'draw' ? [point] : undefined,
       start: selectedTool !== 'draw' ? point : undefined,
       end: selectedTool !== 'draw' ? point : undefined,
@@ -484,6 +494,13 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const point = getCanvasPoint(e);
+
+    // Update cursor position for brush preview
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const rect = canvas.getBoundingClientRect();
+      setCursorPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+    }
 
     // Handle stroke erasing
     if (isErasing && selectedTool === 'eraser' && eraserMode === 'stroke') {
@@ -535,6 +552,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
 
     if (isDrawing && currentAnnotation) {
       setAnnotations([...annotations, currentAnnotation]);
+      setRedoStack([]); // Clear redo stack on new annotation
       setCurrentAnnotation(null);
     }
     setIsDrawing(false);
@@ -548,6 +566,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
         type: 'text',
         color: selectedColor,
         strokeWidth: 3,
+        opacity: opacity,
         text: textInputRef.current.value,
         position: textInput.position,
         bgColor: textBgColor || undefined,
@@ -555,6 +574,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
         outlineWidth: textOutlineColor ? textOutlineWidth : undefined,
       };
       setAnnotations([...annotations, newAnnotation]);
+      setRedoStack([]); // Clear redo stack on new annotation
       textInputRef.current.value = '';
     }
     setTextInput({ visible: false, position: { x: 0, y: 0 } });
@@ -580,7 +600,21 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
 
   // Toolbar handlers
   const handleUndo = useCallback(() => {
-    setAnnotations((prev) => prev.slice(0, -1));
+    setAnnotations((prev) => {
+      if (prev.length === 0) return prev;
+      const removed = prev[prev.length - 1];
+      setRedoStack((stack) => [...stack, removed]);
+      return prev.slice(0, -1);
+    });
+  }, []);
+
+  const handleRedo = useCallback(() => {
+    setRedoStack((stack) => {
+      if (stack.length === 0) return stack;
+      const restored = stack[stack.length - 1];
+      setAnnotations((prev) => [...prev, restored]);
+      return stack.slice(0, -1);
+    });
   }, []);
 
   const handleClearAll = useCallback(() => {
@@ -684,15 +718,21 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       case 'move':
         return draggingId ? 'grabbing' : 'grab';
       case 'draw':
-        return 'crosshair';
+        return 'none'; // Custom brush cursor
       case 'text':
         return 'text';
       case 'eraser':
-        return 'crosshair';
+        return eraserMode === 'stroke' ? 'none' : 'crosshair';
       default:
         return 'crosshair';
     }
   };
+
+  // Should show brush preview cursor
+  const showBrushPreview = cursorPos && (
+    selectedTool === 'draw' ||
+    (selectedTool === 'eraser' && eraserMode === 'stroke')
+  );
 
   return (
     <div
@@ -720,6 +760,8 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
         onColorChange={setSelectedColor}
         brushSize={brushSize}
         onBrushSizeChange={setBrushSize}
+        opacity={opacity}
+        onOpacityChange={setOpacity}
         textBgColor={textBgColor}
         onTextBgColorChange={setTextBgColor}
         textOutlineColor={textOutlineColor}
@@ -730,6 +772,8 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
         onEraserModeChange={setEraserMode}
         canUndo={annotations.length > 0}
         onUndo={handleUndo}
+        canRedo={redoStack.length > 0}
+        onRedo={handleRedo}
         canClear={annotations.length > 0}
         onClearAll={handleClearAll}
         onCopy={handleCopy}
@@ -753,12 +797,35 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
+          onMouseLeave={() => {
+            handleMouseUp();
+            setCursorPos(null);
+          }}
           style={{
             display: 'block',
             cursor: getCursor(),
           }}
         />
+
+        {/* Brush Size Preview Cursor */}
+        {showBrushPreview && (
+          <div
+            style={{
+              position: 'absolute',
+              left: cursorPos.x - brushSize / 2,
+              top: cursorPos.y - brushSize / 2,
+              width: brushSize,
+              height: brushSize,
+              borderRadius: '50%',
+              border: `1px solid ${selectedTool === 'eraser' ? '#fff' : selectedColor}`,
+              backgroundColor: selectedTool === 'eraser'
+                ? 'rgba(255, 255, 255, 0.2)'
+                : `${selectedColor}33`,
+              pointerEvents: 'none',
+              transform: 'translate(0, 0)',
+            }}
+          />
+        )}
 
         {/* Text Input */}
         {textInput.visible && (
@@ -804,9 +871,11 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
           fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
         }}
       >
-        Press <kbd style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>Escape</kbd> to cancel
+        <kbd style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>Escape</kbd> cancel
         {' • '}
-        <kbd style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>Ctrl+Z</kbd> to undo
+        <kbd style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>Ctrl+Z</kbd> undo
+        {' • '}
+        <kbd style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>Ctrl+Shift+Z</kbd> redo
       </p>
     </div>
   );

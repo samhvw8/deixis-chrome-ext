@@ -171,6 +171,26 @@ export const UndoIcon: React.FC<IconProps> = ({ size = 20, className = '' }) => 
 );
 
 /**
+ * Redo/RotateCw icon for redo action
+ */
+export const RedoIcon: React.FC<IconProps> = ({ size = 20, className = '' }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 20 20"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <path d="M17 7H9C5.69 7 3 9.69 3 13C3 16.31 5.69 19 9 19H15" />
+    <path d="M13 3L17 7L13 11" />
+  </svg>
+);
+
+/**
  * Trash icon for clear all action
  */
 export const TrashIcon: React.FC<IconProps> = ({ size = 20, className = '' }) => (
@@ -314,6 +334,70 @@ export const ChevronDownIcon: React.FC<IconProps> = ({ size = 20, className = ''
   </svg>
 );
 
+/**
+ * Zoom In icon
+ */
+export const ZoomInIcon: React.FC<IconProps> = ({ size = 20, className = '' }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 20 20"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <circle cx="9" cy="9" r="6" />
+    <path d="M13.5 13.5L17 17" />
+    <path d="M9 6V12" />
+    <path d="M6 9H12" />
+  </svg>
+);
+
+/**
+ * Zoom Out icon
+ */
+export const ZoomOutIcon: React.FC<IconProps> = ({ size = 20, className = '' }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 20 20"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <circle cx="9" cy="9" r="6" />
+    <path d="M13.5 13.5L17 17" />
+    <path d="M6 9H12" />
+  </svg>
+);
+
+/**
+ * Zoom Reset icon (fit to screen)
+ */
+export const ZoomResetIcon: React.FC<IconProps> = ({ size = 20, className = '' }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 20 20"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <rect x="3" y="3" width="14" height="14" rx="2" />
+    <path d="M7 7L10 10L7 13" />
+    <path d="M13 7L10 10L13 13" />
+  </svg>
+);
+
 export default {
   MoveIcon,
   PencilIcon,
@@ -323,6 +407,7 @@ export default {
   TypeIcon,
   PaletteIcon,
   UndoIcon,
+  RedoIcon,
   TrashIcon,
   CheckIcon,
   CloseIcon,
@@ -330,4 +415,7 @@ export default {
   CopyIcon,
   EraserIcon,
   ChevronDownIcon,
+  ZoomInIcon,
+  ZoomOutIcon,
+  ZoomResetIcon,
 };
