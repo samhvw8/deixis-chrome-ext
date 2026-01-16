@@ -21,6 +21,7 @@ interface Annotation {
   color: string;
   strokeWidth: number;
   opacity: number;          // Opacity 0-1
+  fillColor?: string;       // Fill color for shapes (null = no fill)
   points?: Point[];      // For freehand draw
   start?: Point;         // For shapes
   end?: Point;           // For shapes
@@ -46,6 +47,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
   const [selectedColor, setSelectedColor] = useState(ANNOTATION_COLORS[0].value);
   const [brushSize, setBrushSize] = useState(3);
   const [opacity, setOpacity] = useState(1);
+  const [fillColor, setFillColor] = useState<string | null>(null);
   const [textBgColor, setTextBgColor] = useState<string | null>('rgba(0, 0, 0, 0.7)');
   const [textOutlineColor, setTextOutlineColor] = useState<string | null>(null);
   const [textOutlineWidth, setTextOutlineWidth] = useState(2);
@@ -161,6 +163,10 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
         if (annotation.start && annotation.end) {
           const width = annotation.end.x - annotation.start.x;
           const height = annotation.end.y - annotation.start.y;
+          if (annotation.fillColor) {
+            ctx.fillStyle = annotation.fillColor;
+            ctx.fillRect(annotation.start.x, annotation.start.y, width, height);
+          }
           ctx.strokeRect(annotation.start.x, annotation.start.y, width, height);
         }
         break;
@@ -173,6 +179,10 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
           const radiusY = Math.abs(annotation.end.y - annotation.start.y) / 2;
           ctx.beginPath();
           ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
+          if (annotation.fillColor) {
+            ctx.fillStyle = annotation.fillColor;
+            ctx.fill();
+          }
           ctx.stroke();
         }
         break;
@@ -485,6 +495,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       color: selectedColor,
       strokeWidth: brushSize,
       opacity: opacity,
+      fillColor: (selectedTool === 'rectangle' || selectedTool === 'circle') ? (fillColor || undefined) : undefined,
       points: selectedTool === 'draw' ? [point] : undefined,
       start: selectedTool !== 'draw' ? point : undefined,
       end: selectedTool !== 'draw' ? point : undefined,
@@ -768,6 +779,8 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
         onTextOutlineColorChange={setTextOutlineColor}
         textOutlineWidth={textOutlineWidth}
         onTextOutlineWidthChange={setTextOutlineWidth}
+        fillColor={fillColor}
+        onFillColorChange={setFillColor}
         eraserMode={eraserMode}
         onEraserModeChange={setEraserMode}
         canUndo={annotations.length > 0}

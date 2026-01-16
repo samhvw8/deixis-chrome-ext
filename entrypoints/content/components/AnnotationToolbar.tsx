@@ -49,6 +49,10 @@ export interface AnnotationToolbarProps {
   textOutlineWidth: number;
   /** Callback when text outline width changes */
   onTextOutlineWidthChange: (width: number) => void;
+  /** Fill color for shapes (null means no fill) */
+  fillColor: string | null;
+  /** Callback when fill color changes */
+  onFillColorChange: (color: string | null) => void;
   /** Eraser mode: 'object' deletes whole annotation, 'stroke' erases parts of strokes */
   eraserMode: 'object' | 'stroke';
   /** Callback when eraser mode changes */
@@ -107,6 +111,8 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
   onTextOutlineColorChange,
   textOutlineWidth,
   onTextOutlineWidthChange,
+  fillColor,
+  onFillColorChange,
   eraserMode,
   onEraserModeChange,
   canUndo,
@@ -318,6 +324,49 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
             <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', minWidth: 28 }}>
               {Math.round(opacity * 100)}%
             </span>
+          </div>
+        )}
+
+        {/* Fill Color - shown for rectangle and circle tools */}
+        {['rectangle', 'circle'].includes(selectedTool) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 8 }}>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>Fill:</span>
+            <button
+              type="button"
+              onClick={() => onFillColorChange(fillColor ? null : selectedColor)}
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: 4,
+                border: fillColor ? '2px solid #fff' : '2px dashed rgba(255,255,255,0.4)',
+                background: fillColor || 'transparent',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 12,
+                color: 'rgba(255,255,255,0.6)',
+              }}
+              title={fillColor ? 'Click to remove fill' : 'Click to enable fill'}
+            >
+              {!fillColor && '∅'}
+            </button>
+            {fillColor && (
+              <input
+                type="color"
+                value={fillColor}
+                onChange={(e) => onFillColorChange(e.target.value)}
+                style={{
+                  width: 24,
+                  height: 24,
+                  border: 'none',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  background: 'transparent',
+                }}
+                title="Choose fill color"
+              />
+            )}
           </div>
         )}
 
