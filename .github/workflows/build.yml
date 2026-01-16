@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*.*.*'
   pull_request:
     branches:
       - main
@@ -28,9 +30,33 @@ jobs:
         run: bun run build
 
       - name: Upload Chrome extension artifact
+        if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v4
         with:
           name: deixis-chrome-extension
           path: .output/chrome-mv3/
           if-no-files-found: error
           retention-days: 30
+
+      - name: Get version from tag
+        if: startsWith(github.ref, 'refs/tags/')
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create release zip
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          cd .output
+          zip -r deixis-chrome-extension-${{ steps.get_version.outputs.VERSION }}.zip chrome-mv3/
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Deixis ${{ steps.get_version.outputs.VERSION }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: .output/deixis-chrome-extension-${{ steps.get_version.outputs.VERSION }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
