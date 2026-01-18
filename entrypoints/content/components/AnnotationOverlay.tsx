@@ -34,6 +34,7 @@ interface Annotation {
   outlineColor?: string; // For text outline color
   outlineWidth?: number; // For text outline width
   calloutNumber?: number; // For callout annotations
+  rotation?: number;     // Rotation angle in radians
 }
 
 /**
@@ -79,6 +80,10 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
   const [resizingHandle, setResizingHandle] = useState<ResizeHandle | null>(null);
   const [resizeStartPoint, setResizeStartPoint] = useState<Point | null>(null);
   const [originalAnnotation, setOriginalAnnotation] = useState<Annotation | null>(null);
+
+  // Rotation state
+  const [isRotating, setIsRotating] = useState(false);
+  const [rotationStartAngle, setRotationStartAngle] = useState(0);
 
   // Eraser state
   const [isErasing, setIsErasing] = useState(false);
@@ -166,6 +171,15 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     ctx.lineWidth = annotation.strokeWidth;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
+
+    // Apply rotation if set
+    const rotation = annotation.rotation || 0;
+    if (rotation !== 0) {
+      const center = getAnnotationCenter(annotation);
+      ctx.translate(center.x, center.y);
+      ctx.rotate(rotation);
+      ctx.translate(-center.x, -center.y);
+    }
 
     switch (annotation.type) {
       case 'draw':
@@ -496,6 +510,43 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     return null;
   };
 
+  // Get rotation handle position (above the top center of the annotation)
+  const getRotationHandlePosition = (annotation: Annotation): Point | null => {
+    if (!['rectangle', 'circle', 'arrow'].includes(annotation.type)) {
+      return null;
+    }
+
+    if (!annotation.start || !annotation.end) return null;
+
+    const minY = Math.min(annotation.start.y, annotation.end.y);
+    const midX = (annotation.start.x + annotation.end.x) / 2;
+    const handleDistance = 25; // Distance above the annotation
+
+    // Apply current rotation to find actual handle position
+    const center = getAnnotationCenter(annotation);
+    const rotation = annotation.rotation || 0;
+
+    // Rotate the handle position around the center
+    const handleY = minY - handleDistance;
+    const dx = midX - center.x;
+    const dy = handleY - center.y;
+    const rotatedX = center.x + dx * Math.cos(rotation) - dy * Math.sin(rotation);
+    const rotatedY = center.y + dx * Math.sin(rotation) + dy * Math.cos(rotation);
+
+    return { x: rotatedX, y: rotatedY };
+  };
+
+  // Check if a point is on the rotation handle
+  const isPointOnRotationHandle = (point: Point, annotation: Annotation): boolean => {
+    const handlePos = getRotationHandlePosition(annotation);
+    if (!handlePos) return false;
+
+    const handleRadius = 8;
+    const dx = point.x - handlePos.x;
+    const dy = point.y - handlePos.y;
+    return Math.sqrt(dx * dx + dy * dy) <= handleRadius;
+  };
+
   // Resize annotation based on handle drag
   const resizeAnnotation = (annotation: Annotation, handle: ResizeHandle, delta: Point): Annotation => {
     if (!annotation.start || !annotation.end) return annotation;
@@ -664,10 +715,21 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
 
     // Handle move tool
     if (selectedTool === 'move') {
-      // First, check if clicking on a resize handle of the selected annotation
+      // First, check if clicking on the rotation handle of the selected annotation
       if (selectedAnnotationId) {
         const selectedAnnotation = annotations.find((a) => a.id === selectedAnnotationId);
         if (selectedAnnotation) {
+          // Check rotation handle first (takes priority)
+          if (isPointOnRotationHandle(point, selectedAnnotation)) {
+            setIsRotating(true);
+            setOriginalAnnotation({ ...selectedAnnotation });
+            const center = getAnnotationCenter(selectedAnnotation);
+            const startAngle = Math.atan2(point.y - center.y, point.x - center.x);
+            setRotationStartAngle(startAngle - (selectedAnnotation.rotation || 0));
+            return;
+          }
+
+          // Then check resize handles
           const handle = findResizeHandleAtPoint(point, selectedAnnotation);
           if (handle) {
             setResizingHandle(handle);
@@ -745,6 +807,26 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       return;
     }
 
+    // Handle rotating annotation
+    if (isRotating && originalAnnotation) {
+      const center = getAnnotationCenter(originalAnnotation);
+      const currentAngle = Math.atan2(point.y - center.y, point.x - center.x);
+      let newRotation = currentAngle - rotationStartAngle;
+
+      // Snap to 15° increments if Shift is held
+      if (isShiftHeld) {
+        const snapAngle = Math.PI / 12; // 15 degrees
+        newRotation = Math.round(newRotation / snapAngle) * snapAngle;
+      }
+
+      setAnnotations((prev) =>
+        prev.map((a) =>
+          a.id === originalAnnotation.id ? { ...a, rotation: newRotation } : a
+        )
+      );
+      return;
+    }
+
     // Handle resizing annotation
     if (resizingHandle && resizeStartPoint && originalAnnotation) {
       const delta = {
@@ -796,6 +878,12 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
   const handleMouseUp = () => {
     if (isErasing) {
       setIsErasing(false);
+      return;
+    }
+
+    if (isRotating) {
+      setIsRotating(false);
+      setOriginalAnnotation(null);
       return;
     }
 
@@ -1055,6 +1143,9 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
   const resizeHandles = selectedAnnotation && selectedTool === 'move'
     ? getResizeHandles(selectedAnnotation)
     : [];
+  const rotationHandlePos = selectedAnnotation && selectedTool === 'move'
+    ? getRotationHandlePosition(selectedAnnotation)
+    : null;
 
   return (
     <div
@@ -1171,6 +1262,32 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
             }}
           />
         ))}
+
+        {/* Rotation Handle for Selected Annotation */}
+        {rotationHandlePos && (
+          <div
+            style={{
+              position: 'absolute',
+              left: rotationHandlePos.x - 7,
+              top: rotationHandlePos.y - 7,
+              width: 14,
+              height: 14,
+              backgroundColor: '#ffffff',
+              border: '2px solid #3B82F6',
+              borderRadius: '50%',
+              cursor: 'grab',
+              pointerEvents: 'auto',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <svg width="8" height="8" viewBox="0 0 20 20" fill="none" stroke="#3B82F6" strokeWidth="2">
+              <path d="M4 10a6 6 0 0 1 10.5-4" />
+              <path d="M17 3l-2.5 3.5L11 5" />
+            </svg>
+          </div>
+        )}
 
         {/* Text Input */}
         {textInput.visible && (
