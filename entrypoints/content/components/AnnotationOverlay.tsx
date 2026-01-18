@@ -475,24 +475,41 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     const midX = (minX + maxX) / 2;
     const midY = (minY + maxY) / 2;
 
+    let handles: { handle: ResizeHandle; point: Point }[];
+
     if (annotation.type === 'arrow') {
       // For arrows, just show start and end handles
-      return [
+      handles = [
         { handle: 'nw', point: annotation.start },
         { handle: 'se', point: annotation.end },
       ];
+    } else {
+      handles = [
+        { handle: 'nw', point: { x: minX, y: minY } },
+        { handle: 'n', point: { x: midX, y: minY } },
+        { handle: 'ne', point: { x: maxX, y: minY } },
+        { handle: 'e', point: { x: maxX, y: midY } },
+        { handle: 'se', point: { x: maxX, y: maxY } },
+        { handle: 's', point: { x: midX, y: maxY } },
+        { handle: 'sw', point: { x: minX, y: maxY } },
+        { handle: 'w', point: { x: minX, y: midY } },
+      ];
     }
 
-    return [
-      { handle: 'nw', point: { x: minX, y: minY } },
-      { handle: 'n', point: { x: midX, y: minY } },
-      { handle: 'ne', point: { x: maxX, y: minY } },
-      { handle: 'e', point: { x: maxX, y: midY } },
-      { handle: 'se', point: { x: maxX, y: maxY } },
-      { handle: 's', point: { x: midX, y: maxY } },
-      { handle: 'sw', point: { x: minX, y: maxY } },
-      { handle: 'w', point: { x: minX, y: midY } },
-    ];
+    // Apply rotation transform to handle positions
+    const rotation = annotation.rotation || 0;
+    if (rotation !== 0) {
+      const center = getAnnotationCenter(annotation);
+      handles = handles.map(({ handle, point }) => {
+        const dx = point.x - center.x;
+        const dy = point.y - center.y;
+        const rotatedX = center.x + dx * Math.cos(rotation) - dy * Math.sin(rotation);
+        const rotatedY = center.y + dx * Math.sin(rotation) + dy * Math.cos(rotation);
+        return { handle, point: { x: rotatedX, y: rotatedY } };
+      });
+    }
+
+    return handles;
   };
 
   // Check if a point is on a resize handle
