@@ -80,6 +80,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
   const [resizingHandle, setResizingHandle] = useState<ResizeHandle | null>(null);
   const [resizeStartPoint, setResizeStartPoint] = useState<Point | null>(null);
   const [originalAnnotation, setOriginalAnnotation] = useState<Annotation | null>(null);
+  const [anchorVisualPos, setAnchorVisualPos] = useState<Point | null>(null);
 
   // Rotation state
   const [isRotating, setIsRotating] = useState(false);
@@ -565,49 +566,153 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     return Math.sqrt(dx * dx + dy * dy) <= handleRadius;
   };
 
-  // Resize annotation based on handle drag
-  const resizeAnnotation = (annotation: Annotation, handle: ResizeHandle, delta: Point): Annotation => {
+  // Get the anchor handle (opposite corner) for resize operations
+  const getAnchorHandle = (handle: ResizeHandle): ResizeHandle => {
+    const opposites: Record<ResizeHandle, ResizeHandle> = {
+      'nw': 'se', 'n': 's', 'ne': 'sw', 'e': 'w',
+      'se': 'nw', 's': 'n', 'sw': 'ne', 'w': 'e',
+    };
+    return opposites[handle];
+  };
+
+  // Get unrotated corner position for a handle
+  const getLocalCorner = (annotation: Annotation, handle: ResizeHandle): Point | null => {
+    if (!annotation.start || !annotation.end) return null;
+
+    const minX = Math.min(annotation.start.x, annotation.end.x);
+    const maxX = Math.max(annotation.start.x, annotation.end.x);
+    const minY = Math.min(annotation.start.y, annotation.end.y);
+    const maxY = Math.max(annotation.start.y, annotation.end.y);
+    const midX = (minX + maxX) / 2;
+    const midY = (minY + maxY) / 2;
+
+    switch (handle) {
+      case 'nw': return { x: minX, y: minY };
+      case 'n': return { x: midX, y: minY };
+      case 'ne': return { x: maxX, y: minY };
+      case 'e': return { x: maxX, y: midY };
+      case 'se': return { x: maxX, y: maxY };
+      case 's': return { x: midX, y: maxY };
+      case 'sw': return { x: minX, y: maxY };
+      case 'w': return { x: minX, y: midY };
+    }
+  };
+
+  // Rotate a point around a center
+  const rotatePoint = (point: Point, center: Point, angle: number): Point => {
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const dx = point.x - center.x;
+    const dy = point.y - center.y;
+    return {
+      x: center.x + dx * cos - dy * sin,
+      y: center.y + dx * sin + dy * cos,
+    };
+  };
+
+  // Resize annotation based on handle drag - anchor-based approach
+  const resizeAnnotation = (
+    annotation: Annotation,
+    handle: ResizeHandle,
+    screenDelta: Point,
+    anchorVisualPos: Point
+  ): Annotation => {
     if (!annotation.start || !annotation.end) return annotation;
 
-    let newStart = { ...annotation.start };
-    let newEnd = { ...annotation.end };
+    const rotation = annotation.rotation || 0;
+    const center = getAnnotationCenter(annotation);
 
-    // For arrow, nw controls start, se controls end
+    // For arrows, use simple endpoint adjustment
     if (annotation.type === 'arrow') {
+      const cos = Math.cos(-rotation);
+      const sin = Math.sin(-rotation);
+      const localDelta = {
+        x: screenDelta.x * cos - screenDelta.y * sin,
+        y: screenDelta.x * sin + screenDelta.y * cos,
+      };
+
       if (handle === 'nw') {
-        newStart = { x: annotation.start.x + delta.x, y: annotation.start.y + delta.y };
+        return { ...annotation, start: { x: annotation.start.x + localDelta.x, y: annotation.start.y + localDelta.y } };
       } else if (handle === 'se') {
-        newEnd = { x: annotation.end.x + delta.x, y: annotation.end.y + delta.y };
+        return { ...annotation, end: { x: annotation.end.x + localDelta.x, y: annotation.end.y + localDelta.y } };
       }
+      return annotation;
+    }
+
+    // Get the dragged corner's current visual position
+    const draggedLocalPos = getLocalCorner(annotation, handle);
+    if (!draggedLocalPos) return annotation;
+
+    const draggedVisualPos = rotatePoint(draggedLocalPos, center, rotation);
+
+    // New visual position after drag
+    const newDraggedVisualPos = {
+      x: draggedVisualPos.x + screenDelta.x,
+      y: draggedVisualPos.y + screenDelta.y,
+    };
+
+    // Now we need to find new start/end such that:
+    // 1. The anchor corner stays at anchorVisualPos (in visual space)
+    // 2. The dragged corner moves to newDraggedVisualPos
+
+    // For corner handles (nw, ne, se, sw), both corners define the rectangle
+    // For edge handles (n, s, e, w), we only move one dimension
+
+    // Convert visual positions back to local space (unrotate around the NEW center)
+    // The new center is the midpoint between anchor and dragged positions
+    const newCenter = {
+      x: (anchorVisualPos.x + newDraggedVisualPos.x) / 2,
+      y: (anchorVisualPos.y + newDraggedVisualPos.y) / 2,
+    };
+
+    // Unrotate both corners to get local positions
+    const anchorLocal = rotatePoint(anchorVisualPos, newCenter, -rotation);
+    const draggedLocal = rotatePoint(newDraggedVisualPos, newCenter, -rotation);
+
+    // Determine new bounds based on handle type
+    let newStart: Point;
+    let newEnd: Point;
+
+    if (['nw', 'se', 'ne', 'sw'].includes(handle)) {
+      // Corner handles: both corners directly define the rectangle
+      newStart = {
+        x: Math.min(anchorLocal.x, draggedLocal.x),
+        y: Math.min(anchorLocal.y, draggedLocal.y),
+      };
+      newEnd = {
+        x: Math.max(anchorLocal.x, draggedLocal.x),
+        y: Math.max(anchorLocal.y, draggedLocal.y),
+      };
     } else {
-      // For rectangles and circles
-      switch (handle) {
-        case 'nw':
-          newStart = { x: annotation.start.x + delta.x, y: annotation.start.y + delta.y };
-          break;
-        case 'n':
-          newStart = { ...annotation.start, y: annotation.start.y + delta.y };
-          break;
-        case 'ne':
-          newStart = { ...annotation.start, y: annotation.start.y + delta.y };
-          newEnd = { ...annotation.end, x: annotation.end.x + delta.x };
-          break;
-        case 'e':
-          newEnd = { ...annotation.end, x: annotation.end.x + delta.x };
-          break;
-        case 'se':
-          newEnd = { x: annotation.end.x + delta.x, y: annotation.end.y + delta.y };
-          break;
-        case 's':
-          newEnd = { ...annotation.end, y: annotation.end.y + delta.y };
-          break;
-        case 'sw':
-          newStart = { ...annotation.start, x: annotation.start.x + delta.x };
-          newEnd = { ...annotation.end, y: annotation.end.y + delta.y };
-          break;
-        case 'w':
-          newStart = { ...annotation.start, x: annotation.start.x + delta.x };
-          break;
+      // Edge handles: only one dimension changes
+      // We need to preserve the perpendicular dimension
+      const anchorHandlePos = getLocalCorner(annotation, getAnchorHandle(handle));
+      if (!anchorHandlePos) return annotation;
+
+      // Transform local anchor to visual, then to new local space
+      const anchorVisual = rotatePoint(anchorHandlePos, center, rotation);
+      const anchorNewLocal = rotatePoint(anchorVisual, newCenter, -rotation);
+
+      if (handle === 'n' || handle === 's') {
+        // Vertical edge: Y changes, X stays same
+        newStart = {
+          x: annotation.start.x,
+          y: Math.min(anchorNewLocal.y, draggedLocal.y),
+        };
+        newEnd = {
+          x: annotation.end.x,
+          y: Math.max(anchorNewLocal.y, draggedLocal.y),
+        };
+      } else {
+        // Horizontal edge: X changes, Y stays same
+        newStart = {
+          x: Math.min(anchorNewLocal.x, draggedLocal.x),
+          y: annotation.start.y,
+        };
+        newEnd = {
+          x: Math.max(anchorNewLocal.x, draggedLocal.x),
+          y: annotation.end.y,
+        };
       }
     }
 
@@ -754,9 +859,17 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
           const handle = findResizeHandleAtPoint(point, selectedAnnotation);
 
           if (handle) {
+            // Calculate anchor position (opposite corner in visual space)
+            const anchorHandle = getAnchorHandle(handle);
+            const anchorLocalPos = getLocalCorner(selectedAnnotation, anchorHandle);
+            const center = getAnnotationCenter(selectedAnnotation);
+            const rotation = selectedAnnotation.rotation || 0;
+            const anchorPos = anchorLocalPos ? rotatePoint(anchorLocalPos, center, rotation) : null;
+
             setResizingHandle(handle);
             setResizeStartPoint(point);
             setOriginalAnnotation({ ...selectedAnnotation });
+            setAnchorVisualPos(anchorPos);
             return;
           }
         }
@@ -1110,23 +1223,13 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
         );
       }
 
-      if (resizingHandle && resizeStartPoint && originalAnnotation) {
+      if (resizingHandle && resizeStartPoint && originalAnnotation && anchorVisualPos) {
         const screenDelta = {
           x: point.x - resizeStartPoint.x,
           y: point.y - resizeStartPoint.y,
         };
 
-        // Transform delta from screen space to annotation's local space
-        // by rotating it by the negative of the annotation's rotation
-        const rotation = originalAnnotation.rotation || 0;
-        const cos = Math.cos(-rotation);
-        const sin = Math.sin(-rotation);
-        const localDelta = {
-          x: screenDelta.x * cos - screenDelta.y * sin,
-          y: screenDelta.x * sin + screenDelta.y * cos,
-        };
-
-        const resized = resizeAnnotation(originalAnnotation, resizingHandle, localDelta);
+        const resized = resizeAnnotation(originalAnnotation, resizingHandle, screenDelta, anchorVisualPos);
         setAnnotations((prev) =>
           prev.map((a) => (a.id === originalAnnotation.id ? resized : a))
         );
@@ -1142,6 +1245,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
         setResizingHandle(null);
         setResizeStartPoint(null);
         setOriginalAnnotation(null);
+        setAnchorVisualPos(null);
       }
     };
 
@@ -1151,7 +1255,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       window.removeEventListener('mousemove', handleWindowMouseMove);
       window.removeEventListener('mouseup', handleWindowMouseUp);
     };
-  }, [resizingHandle, isRotating, resizeStartPoint, originalAnnotation, rotationStartAngle, isShiftHeld]);
+  }, [resizingHandle, isRotating, resizeStartPoint, originalAnnotation, rotationStartAngle, isShiftHeld, anchorVisualPos]);
 
   // Cursor based on tool
   const getCursor = () => {
@@ -1331,9 +1435,18 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
               if (selectedAnnotation && canvasRef.current) {
                 const rect = canvasRef.current.getBoundingClientRect();
                 const clickPoint = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+
+                // Calculate anchor position (opposite corner in visual space)
+                const anchorHandle = getAnchorHandle(handle);
+                const anchorLocalPos = getLocalCorner(selectedAnnotation, anchorHandle);
+                const center = getAnnotationCenter(selectedAnnotation);
+                const rotation = selectedAnnotation.rotation || 0;
+                const anchorPos = anchorLocalPos ? rotatePoint(anchorLocalPos, center, rotation) : null;
+
                 setResizingHandle(handle);
                 setResizeStartPoint(clickPoint);
                 setOriginalAnnotation({ ...selectedAnnotation });
+                setAnchorVisualPos(anchorPos);
               }
             }}
             style={{
