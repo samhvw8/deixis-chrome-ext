@@ -610,16 +610,17 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     };
   };
 
-  // Resize annotation based on handle drag - anchor-based approach
+  // Resize annotation based on handle drag
   const resizeAnnotation = (
     annotation: Annotation,
     handle: ResizeHandle,
     screenDelta: Point,
-    _anchorVisualPos: Point
+    anchorVisualPos: Point
   ): Annotation => {
     if (!annotation.start || !annotation.end) return annotation;
 
     const rotation = annotation.rotation || 0;
+    const oldCenter = getAnnotationCenter(annotation);
 
     // Transform screen delta to local (unrotated) space
     const cos = Math.cos(-rotation);
@@ -644,42 +645,71 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     let newEnd = { ...annotation.end };
 
     // Determine which edges to move based on handle
-    // Corner handles move both axes, edge handles move one axis
     switch (handle) {
       case 'nw':
-        // Move top-left corner: both start.x and start.y change
         newStart = { x: annotation.start.x + localDelta.x, y: annotation.start.y + localDelta.y };
         break;
       case 'n':
-        // Move top edge: only start.y changes
         newStart = { ...annotation.start, y: annotation.start.y + localDelta.y };
         break;
       case 'ne':
-        // Move top-right corner: end.x and start.y change
         newStart = { ...annotation.start, y: annotation.start.y + localDelta.y };
         newEnd = { ...annotation.end, x: annotation.end.x + localDelta.x };
         break;
       case 'e':
-        // Move right edge: only end.x changes
         newEnd = { ...annotation.end, x: annotation.end.x + localDelta.x };
         break;
       case 'se':
-        // Move bottom-right corner: both end.x and end.y change
         newEnd = { x: annotation.end.x + localDelta.x, y: annotation.end.y + localDelta.y };
         break;
       case 's':
-        // Move bottom edge: only end.y changes
         newEnd = { ...annotation.end, y: annotation.end.y + localDelta.y };
         break;
       case 'sw':
-        // Move bottom-left corner: start.x and end.y change
         newStart = { ...annotation.start, x: annotation.start.x + localDelta.x };
         newEnd = { ...annotation.end, y: annotation.end.y + localDelta.y };
         break;
       case 'w':
-        // Move left edge: only start.x changes
         newStart = { ...annotation.start, x: annotation.start.x + localDelta.x };
         break;
+    }
+
+    // Calculate new center after resize
+    const newCenter = {
+      x: (newStart.x + newEnd.x) / 2,
+      y: (newStart.y + newEnd.y) / 2,
+    };
+
+    // For edge handles, compensate for center shift to keep opposite edge fixed
+    if (['n', 's', 'e', 'w'].includes(handle) && rotation !== 0) {
+      // Get the anchor's local position (opposite edge midpoint)
+      const anchorHandle = getAnchorHandle(handle);
+      const anchorLocalPos = getLocalCorner(annotation, anchorHandle);
+      if (!anchorLocalPos) return { ...annotation, start: newStart, end: newEnd };
+
+      // Calculate where the anchor would be after resize with new center
+      const anchorNewVisualPos = rotatePoint(
+        handle === 'n' || handle === 's'
+          ? { x: newCenter.x, y: anchorHandle === 's' ? newEnd.y : newStart.y }
+          : { x: anchorHandle === 'e' ? newEnd.x : newStart.x, y: newCenter.y },
+        newCenter,
+        rotation
+      );
+
+      // Calculate offset needed to keep anchor at its original visual position
+      const offset = {
+        x: anchorVisualPos.x - anchorNewVisualPos.x,
+        y: anchorVisualPos.y - anchorNewVisualPos.y,
+      };
+
+      // Convert offset to local space and apply to both start and end
+      const localOffset = {
+        x: offset.x * cos - offset.y * sin,
+        y: offset.x * sin + offset.y * cos,
+      };
+
+      newStart = { x: newStart.x + localOffset.x, y: newStart.y + localOffset.y };
+      newEnd = { x: newEnd.x + localOffset.x, y: newEnd.y + localOffset.y };
     }
 
     return { ...annotation, start: newStart, end: newEnd };
