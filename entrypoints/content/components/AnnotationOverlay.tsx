@@ -566,13 +566,15 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     return Math.sqrt(dx * dx + dy * dy) <= handleRadius;
   };
 
-  // Get the anchor handle (opposite corner) for resize operations
+  // Get the anchor corner for resize operations
+  // For corner handles: opposite corner
+  // For edge handles: one of the opposite corners (to keep that corner fixed)
   const getAnchorHandle = (handle: ResizeHandle): ResizeHandle => {
-    const opposites: Record<ResizeHandle, ResizeHandle> = {
-      'nw': 'se', 'n': 's', 'ne': 'sw', 'e': 'w',
-      'se': 'nw', 's': 'n', 'sw': 'ne', 'w': 'e',
+    const anchors: Record<ResizeHandle, ResizeHandle> = {
+      'nw': 'se', 'n': 'se', 'ne': 'sw', 'e': 'sw',
+      'se': 'nw', 's': 'nw', 'sw': 'ne', 'w': 'ne',
     };
-    return opposites[handle];
+    return anchors[handle];
   };
 
   // Get unrotated corner position for a handle
@@ -674,27 +676,21 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
         break;
     }
 
-    // Calculate new center after resize
-    const newCenter = {
-      x: (newStart.x + newEnd.x) / 2,
-      y: (newStart.y + newEnd.y) / 2,
-    };
+    // For rotated annotations, compensate for center shift to keep anchor corner fixed
+    if (rotation !== 0) {
+      // Calculate new center after resize
+      const newCenter = {
+        x: (newStart.x + newEnd.x) / 2,
+        y: (newStart.y + newEnd.y) / 2,
+      };
 
-    // For edge handles, compensate for center shift to keep opposite edge fixed
-    if (['n', 's', 'e', 'w'].includes(handle) && rotation !== 0) {
-      // Get the anchor's local position (opposite edge midpoint)
+      // Get the anchor corner's local position after resize
       const anchorHandle = getAnchorHandle(handle);
-      const anchorLocalPos = getLocalCorner(annotation, anchorHandle);
+      const anchorLocalPos = getLocalCorner({ ...annotation, start: newStart, end: newEnd }, anchorHandle);
       if (!anchorLocalPos) return { ...annotation, start: newStart, end: newEnd };
 
-      // Calculate where the anchor would be after resize with new center
-      const anchorNewVisualPos = rotatePoint(
-        handle === 'n' || handle === 's'
-          ? { x: newCenter.x, y: anchorHandle === 's' ? newEnd.y : newStart.y }
-          : { x: anchorHandle === 'e' ? newEnd.x : newStart.x, y: newCenter.y },
-        newCenter,
-        rotation
-      );
+      // Calculate where the anchor corner would appear in visual space after resize
+      const anchorNewVisualPos = rotatePoint(anchorLocalPos, newCenter, rotation);
 
       // Calculate offset needed to keep anchor at its original visual position
       const offset = {
