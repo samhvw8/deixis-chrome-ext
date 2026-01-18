@@ -21,6 +21,7 @@
 | Move Tool | Implemented | Drag existing annotations |
 | Duplicate Annotation | Implemented | Ctrl+D to duplicate selected annotation |
 | Resize/Scale Annotations | Implemented | Resize handles on selected annotations |
+| Rotate Annotations | Implemented | Rotation handle on selected annotations with Shift snap |
 | Snap to Grid/Constraints | Implemented | Shift key for squares, circles, 45° angles |
 | Eraser Tool | Implemented | Object mode & stroke mode |
 | Color Picker | Implemented | Preset + custom color picker |
@@ -207,6 +208,17 @@ Stroke Mode:
 - Non-freehand annotations are not affected
 ```
 
+#### FR-7e: Rotate Annotations
+```
+GIVEN annotation mode is active
+AND user has selected an annotation with Move tool (rectangle, circle, or arrow)
+WHEN user drags the rotation handle (blue circular handle above the annotation)
+THEN the annotation rotates around its center point
+AND the rotation handle position updates dynamically as the annotation rotates
+AND holding Shift while rotating snaps to 15° increments (0°, 15°, 30°, 45°, 60°, etc.)
+AND rotation is applied using canvas transforms when drawing the annotation
+```
+
 ### Color & Editing
 
 #### FR-8: Color Picker
@@ -334,7 +346,7 @@ AND nothing is saved or copied
 | T | Text tool |
 | C | Number/Callout tool |
 | X | Eraser tool |
-| Shift | Snap to grid (perfect squares/circles, 45° arrows) |
+| Shift | Snap to grid (perfect squares/circles, 45° arrows, 15° rotation) |
 | Ctrl+D | Duplicate selected annotation |
 | Ctrl+Z | Undo |
 | Escape | Cancel/Close |
@@ -456,6 +468,9 @@ User draws arrow while holding Shift to snap to 45° angle → Prompts "Move thi
 
 ### Use Case 7: Duplicate Patterns
 User creates one annotation marking desired style, then duplicates it (Ctrl+D) multiple times → Prompts "Apply this same effect to all marked areas"
+
+### Use Case 8: Precise Angular Alignment
+User draws arrow or rectangle, then rotates it to exact angle using rotation handle with Shift key → Prompts "Align element to match this exact angle" or "Extend this line at 30° angle"
 
 ---
 
