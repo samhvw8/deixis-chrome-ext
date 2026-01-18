@@ -520,7 +520,8 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     for (const { handle, point: handlePoint } of handles) {
       const dx = point.x - handlePoint.x;
       const dy = point.y - handlePoint.y;
-      if (Math.sqrt(dx * dx + dy * dy) <= handleRadius) {
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance <= handleRadius) {
         return handle;
       }
     }
@@ -735,9 +736,12 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       // First, check if clicking on the rotation handle of the selected annotation
       if (selectedAnnotationId) {
         const selectedAnnotation = annotations.find((a) => a.id === selectedAnnotationId);
+
         if (selectedAnnotation) {
           // Check rotation handle first (takes priority)
-          if (isPointOnRotationHandle(point, selectedAnnotation)) {
+          const isOnRotation = isPointOnRotationHandle(point, selectedAnnotation);
+
+          if (isOnRotation) {
             setIsRotating(true);
             setOriginalAnnotation({ ...selectedAnnotation });
             const center = getAnnotationCenter(selectedAnnotation);
@@ -748,6 +752,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
 
           // Then check resize handles
           const handle = findResizeHandleAtPoint(point, selectedAnnotation);
+
           if (handle) {
             setResizingHandle(handle);
             setResizeStartPoint(point);
@@ -759,6 +764,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
 
       // Then check for hit on any annotation
       const hitAnnotation = findAnnotationAtPoint(point);
+
       if (hitAnnotation) {
         setSelectedAnnotationId(hitAnnotation.id);
         setDraggingId(hitAnnotation.id);
@@ -824,36 +830,8 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       return;
     }
 
-    // Handle rotating annotation
-    if (isRotating && originalAnnotation) {
-      const center = getAnnotationCenter(originalAnnotation);
-      const currentAngle = Math.atan2(point.y - center.y, point.x - center.x);
-      let newRotation = currentAngle - rotationStartAngle;
-
-      // Snap to 15° increments if Shift is held
-      if (isShiftHeld) {
-        const snapAngle = Math.PI / 12; // 15 degrees
-        newRotation = Math.round(newRotation / snapAngle) * snapAngle;
-      }
-
-      setAnnotations((prev) =>
-        prev.map((a) =>
-          a.id === originalAnnotation.id ? { ...a, rotation: newRotation } : a
-        )
-      );
-      return;
-    }
-
-    // Handle resizing annotation
-    if (resizingHandle && resizeStartPoint && originalAnnotation) {
-      const delta = {
-        x: point.x - resizeStartPoint.x,
-        y: point.y - resizeStartPoint.y,
-      };
-      const resized = resizeAnnotation(originalAnnotation, resizingHandle, delta);
-      setAnnotations((prev) =>
-        prev.map((a) => (a.id === originalAnnotation.id ? resized : a))
-      );
+    // Skip if rotating or resizing - window-level handlers manage these
+    if (isRotating || resizingHandle) {
       return;
     }
 
@@ -898,16 +876,8 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       return;
     }
 
-    if (isRotating) {
-      setIsRotating(false);
-      setOriginalAnnotation(null);
-      return;
-    }
-
-    if (resizingHandle) {
-      setResizingHandle(null);
-      setResizeStartPoint(null);
-      setOriginalAnnotation(null);
+    // Skip if rotating or resizing - window-level handlers manage these
+    if (isRotating || resizingHandle) {
       return;
     }
 
@@ -1111,6 +1081,78 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     };
   }, []);
 
+  // Window-level mouse handlers for resize/rotate (so dragging works outside canvas)
+  useEffect(() => {
+    if (!resizingHandle && !isRotating) return;
+
+    const handleWindowMouseMove = (e: MouseEvent) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const point = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+
+      if (isRotating && originalAnnotation) {
+        const center = getAnnotationCenter(originalAnnotation);
+        const currentAngle = Math.atan2(point.y - center.y, point.x - center.x);
+        let newRotation = currentAngle - rotationStartAngle;
+
+        // Snap to 15° increments if Shift is held
+        if (isShiftHeld) {
+          const snapAngle = Math.PI / 12;
+          newRotation = Math.round(newRotation / snapAngle) * snapAngle;
+        }
+
+        setAnnotations((prev) =>
+          prev.map((a) =>
+            a.id === originalAnnotation.id ? { ...a, rotation: newRotation } : a
+          )
+        );
+      }
+
+      if (resizingHandle && resizeStartPoint && originalAnnotation) {
+        const screenDelta = {
+          x: point.x - resizeStartPoint.x,
+          y: point.y - resizeStartPoint.y,
+        };
+
+        // Transform delta from screen space to annotation's local space
+        // by rotating it by the negative of the annotation's rotation
+        const rotation = originalAnnotation.rotation || 0;
+        const cos = Math.cos(-rotation);
+        const sin = Math.sin(-rotation);
+        const localDelta = {
+          x: screenDelta.x * cos - screenDelta.y * sin,
+          y: screenDelta.x * sin + screenDelta.y * cos,
+        };
+
+        const resized = resizeAnnotation(originalAnnotation, resizingHandle, localDelta);
+        setAnnotations((prev) =>
+          prev.map((a) => (a.id === originalAnnotation.id ? resized : a))
+        );
+      }
+    };
+
+    const handleWindowMouseUp = () => {
+      if (isRotating) {
+        setIsRotating(false);
+        setOriginalAnnotation(null);
+      }
+      if (resizingHandle) {
+        setResizingHandle(null);
+        setResizeStartPoint(null);
+        setOriginalAnnotation(null);
+      }
+    };
+
+    window.addEventListener('mousemove', handleWindowMouseMove);
+    window.addEventListener('mouseup', handleWindowMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove);
+      window.removeEventListener('mouseup', handleWindowMouseUp);
+    };
+  }, [resizingHandle, isRotating, resizeStartPoint, originalAnnotation, rotationStartAngle, isShiftHeld]);
+
   // Cursor based on tool
   const getCursor = () => {
     switch (selectedTool) {
@@ -1127,21 +1169,40 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     }
   };
 
-  // Cursor for resize handles
-  const getCursorForHandle = (handle: ResizeHandle): string => {
-    switch (handle) {
-      case 'nw':
-      case 'se':
-        return 'nwse-resize';
-      case 'ne':
-      case 'sw':
-        return 'nesw-resize';
-      case 'n':
-      case 's':
-        return 'ns-resize';
-      case 'e':
-      case 'w':
+  // Cursor for resize handles (accounting for rotation)
+  const getCursorForHandle = (handle: ResizeHandle, rotation: number = 0): string => {
+    // Define the base angle for each handle (in radians)
+    const handleAngles: Record<ResizeHandle, number> = {
+      'e': 0,
+      'se': Math.PI / 4,
+      's': Math.PI / 2,
+      'sw': (3 * Math.PI) / 4,
+      'w': Math.PI,
+      'nw': -(3 * Math.PI) / 4,
+      'n': -Math.PI / 2,
+      'ne': -Math.PI / 4,
+    };
+
+    // Calculate the effective angle after rotation
+    let effectiveAngle = handleAngles[handle] + rotation;
+
+    // Normalize to 0 to 2π range
+    while (effectiveAngle < 0) effectiveAngle += Math.PI * 2;
+    while (effectiveAngle >= Math.PI * 2) effectiveAngle -= Math.PI * 2;
+
+    // Determine cursor based on effective angle (8 sectors of 22.5° each)
+    // We map to 4 cursor types (each covers 2 opposite sectors)
+    const sector = Math.round((effectiveAngle / Math.PI) * 4) % 4;
+
+    switch (sector) {
+      case 0: // ~0° or ~180° (horizontal)
         return 'ew-resize';
+      case 1: // ~45° or ~225° (diagonal)
+        return 'nwse-resize';
+      case 2: // ~90° or ~270° (vertical)
+        return 'ns-resize';
+      case 3: // ~135° or ~315° (other diagonal)
+        return 'nesw-resize';
       default:
         return 'pointer';
     }
@@ -1265,6 +1326,16 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
         {resizeHandles.map(({ handle, point }) => (
           <div
             key={handle}
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              if (selectedAnnotation && canvasRef.current) {
+                const rect = canvasRef.current.getBoundingClientRect();
+                const clickPoint = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+                setResizingHandle(handle);
+                setResizeStartPoint(clickPoint);
+                setOriginalAnnotation({ ...selectedAnnotation });
+              }
+            }}
             style={{
               position: 'absolute',
               left: point.x - 5,
@@ -1274,15 +1345,27 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
               backgroundColor: '#ffffff',
               border: '2px solid #22C55E',
               borderRadius: 2,
-              cursor: getCursorForHandle(handle),
+              cursor: getCursorForHandle(handle, selectedAnnotation?.rotation || 0),
               pointerEvents: 'auto',
             }}
           />
         ))}
 
         {/* Rotation Handle for Selected Annotation */}
-        {rotationHandlePos && (
+        {rotationHandlePos && selectedAnnotation && (
           <div
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              if (canvasRef.current) {
+                const rect = canvasRef.current.getBoundingClientRect();
+                const clickPoint = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+                setIsRotating(true);
+                setOriginalAnnotation({ ...selectedAnnotation });
+                const center = getAnnotationCenter(selectedAnnotation);
+                const startAngle = Math.atan2(clickPoint.y - center.y, clickPoint.x - center.x);
+                setRotationStartAngle(startAngle - (selectedAnnotation.rotation || 0));
+              }
+            }}
             style={{
               position: 'absolute',
               left: rotationHandlePos.x - 7,
