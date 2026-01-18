@@ -615,22 +615,22 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     annotation: Annotation,
     handle: ResizeHandle,
     screenDelta: Point,
-    anchorVisualPos: Point
+    _anchorVisualPos: Point
   ): Annotation => {
     if (!annotation.start || !annotation.end) return annotation;
 
     const rotation = annotation.rotation || 0;
-    const center = getAnnotationCenter(annotation);
+
+    // Transform screen delta to local (unrotated) space
+    const cos = Math.cos(-rotation);
+    const sin = Math.sin(-rotation);
+    const localDelta = {
+      x: screenDelta.x * cos - screenDelta.y * sin,
+      y: screenDelta.x * sin + screenDelta.y * cos,
+    };
 
     // For arrows, use simple endpoint adjustment
     if (annotation.type === 'arrow') {
-      const cos = Math.cos(-rotation);
-      const sin = Math.sin(-rotation);
-      const localDelta = {
-        x: screenDelta.x * cos - screenDelta.y * sin,
-        y: screenDelta.x * sin + screenDelta.y * cos,
-      };
-
       if (handle === 'nw') {
         return { ...annotation, start: { x: annotation.start.x + localDelta.x, y: annotation.start.y + localDelta.y } };
       } else if (handle === 'se') {
@@ -639,81 +639,47 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       return annotation;
     }
 
-    // Get the dragged corner's current visual position
-    const draggedLocalPos = getLocalCorner(annotation, handle);
-    if (!draggedLocalPos) return annotation;
+    // For rectangles and circles, apply delta to the appropriate edges
+    let newStart = { ...annotation.start };
+    let newEnd = { ...annotation.end };
 
-    const draggedVisualPos = rotatePoint(draggedLocalPos, center, rotation);
-
-    // New visual position after drag
-    const newDraggedVisualPos = {
-      x: draggedVisualPos.x + screenDelta.x,
-      y: draggedVisualPos.y + screenDelta.y,
-    };
-
-    // Now we need to find new start/end such that:
-    // 1. The anchor corner stays at anchorVisualPos (in visual space)
-    // 2. The dragged corner moves to newDraggedVisualPos
-
-    // For corner handles (nw, ne, se, sw), both corners define the rectangle
-    // For edge handles (n, s, e, w), we only move one dimension
-
-    // Convert visual positions back to local space (unrotate around the NEW center)
-    // The new center is the midpoint between anchor and dragged positions
-    const newCenter = {
-      x: (anchorVisualPos.x + newDraggedVisualPos.x) / 2,
-      y: (anchorVisualPos.y + newDraggedVisualPos.y) / 2,
-    };
-
-    // Unrotate both corners to get local positions
-    const anchorLocal = rotatePoint(anchorVisualPos, newCenter, -rotation);
-    const draggedLocal = rotatePoint(newDraggedVisualPos, newCenter, -rotation);
-
-    // Determine new bounds based on handle type
-    let newStart: Point;
-    let newEnd: Point;
-
-    if (['nw', 'se', 'ne', 'sw'].includes(handle)) {
-      // Corner handles: both corners directly define the rectangle
-      newStart = {
-        x: Math.min(anchorLocal.x, draggedLocal.x),
-        y: Math.min(anchorLocal.y, draggedLocal.y),
-      };
-      newEnd = {
-        x: Math.max(anchorLocal.x, draggedLocal.x),
-        y: Math.max(anchorLocal.y, draggedLocal.y),
-      };
-    } else {
-      // Edge handles: only one dimension changes
-      // We need to preserve the perpendicular dimension
-      const anchorHandlePos = getLocalCorner(annotation, getAnchorHandle(handle));
-      if (!anchorHandlePos) return annotation;
-
-      // Transform local anchor to visual, then to new local space
-      const anchorVisual = rotatePoint(anchorHandlePos, center, rotation);
-      const anchorNewLocal = rotatePoint(anchorVisual, newCenter, -rotation);
-
-      if (handle === 'n' || handle === 's') {
-        // Vertical edge: Y changes, X stays same
-        newStart = {
-          x: annotation.start.x,
-          y: Math.min(anchorNewLocal.y, draggedLocal.y),
-        };
-        newEnd = {
-          x: annotation.end.x,
-          y: Math.max(anchorNewLocal.y, draggedLocal.y),
-        };
-      } else {
-        // Horizontal edge: X changes, Y stays same
-        newStart = {
-          x: Math.min(anchorNewLocal.x, draggedLocal.x),
-          y: annotation.start.y,
-        };
-        newEnd = {
-          x: Math.max(anchorNewLocal.x, draggedLocal.x),
-          y: annotation.end.y,
-        };
-      }
+    // Determine which edges to move based on handle
+    // Corner handles move both axes, edge handles move one axis
+    switch (handle) {
+      case 'nw':
+        // Move top-left corner: both start.x and start.y change
+        newStart = { x: annotation.start.x + localDelta.x, y: annotation.start.y + localDelta.y };
+        break;
+      case 'n':
+        // Move top edge: only start.y changes
+        newStart = { ...annotation.start, y: annotation.start.y + localDelta.y };
+        break;
+      case 'ne':
+        // Move top-right corner: end.x and start.y change
+        newStart = { ...annotation.start, y: annotation.start.y + localDelta.y };
+        newEnd = { ...annotation.end, x: annotation.end.x + localDelta.x };
+        break;
+      case 'e':
+        // Move right edge: only end.x changes
+        newEnd = { ...annotation.end, x: annotation.end.x + localDelta.x };
+        break;
+      case 'se':
+        // Move bottom-right corner: both end.x and end.y change
+        newEnd = { x: annotation.end.x + localDelta.x, y: annotation.end.y + localDelta.y };
+        break;
+      case 's':
+        // Move bottom edge: only end.y changes
+        newEnd = { ...annotation.end, y: annotation.end.y + localDelta.y };
+        break;
+      case 'sw':
+        // Move bottom-left corner: start.x and end.y change
+        newStart = { ...annotation.start, x: annotation.start.x + localDelta.x };
+        newEnd = { ...annotation.end, y: annotation.end.y + localDelta.y };
+        break;
+      case 'w':
+        // Move left edge: only start.x changes
+        newStart = { ...annotation.start, x: annotation.start.x + localDelta.x };
+        break;
     }
 
     return { ...annotation, start: newStart, end: newEnd };
