@@ -15,6 +15,9 @@ interface Point {
   y: number;
 }
 
+// Resize handle positions
+type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
+
 interface Annotation {
   id: string;
   type: AnnotationTool;
@@ -30,6 +33,7 @@ interface Annotation {
   bgColor?: string;      // For text background color
   outlineColor?: string; // For text outline color
   outlineWidth?: number; // For text outline width
+  calloutNumber?: number; // For callout annotations
 }
 
 /**
@@ -61,15 +65,29 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     position: { x: 0, y: 0 },
   });
 
+  // Callout counter for auto-incrementing numbers
+  const [calloutCounter, setCalloutCounter] = useState(1);
+
   // Drag state for move tool
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState<Point>({ x: 0, y: 0 });
+
+  // Selection state for duplicate/manipulation
+  const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
+
+  // Resize state
+  const [resizingHandle, setResizingHandle] = useState<ResizeHandle | null>(null);
+  const [resizeStartPoint, setResizeStartPoint] = useState<Point | null>(null);
+  const [originalAnnotation, setOriginalAnnotation] = useState<Annotation | null>(null);
 
   // Eraser state
   const [isErasing, setIsErasing] = useState(false);
 
   // Cursor preview state
   const [cursorPos, setCursorPos] = useState<Point | null>(null);
+
+  // Shift key state for constraining shapes
+  const [isShiftHeld, setIsShiftHeld] = useState(false);
 
   // Refs
   const containerRef = useRef<HTMLDivElement>(null);
@@ -221,6 +239,32 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
           ctx.fillText(annotation.text, annotation.position.x, annotation.position.y);
         }
         break;
+
+      case 'callout':
+        if (annotation.position && annotation.calloutNumber !== undefined) {
+          const radius = 14;
+          const x = annotation.position.x;
+          const y = annotation.position.y;
+
+          // Draw filled circle
+          ctx.beginPath();
+          ctx.arc(x, y, radius, 0, Math.PI * 2);
+          ctx.fillStyle = annotation.color;
+          ctx.fill();
+
+          // Draw white border
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          // Draw number
+          ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(String(annotation.calloutNumber), x, y);
+        }
+        break;
     }
     ctx.restore();
   };
@@ -261,6 +305,31 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       x: e.clientX - rect.left,
       y: e.clientY - rect.top,
     };
+  };
+
+  // Constrain point for Shift+drag (perfect squares/circles, 45° angles)
+  const constrainPoint = (start: Point, end: Point, type: AnnotationTool): Point => {
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+
+    if (type === 'rectangle' || type === 'circle') {
+      // Constrain to perfect square/circle
+      const size = Math.max(Math.abs(dx), Math.abs(dy));
+      return {
+        x: start.x + size * Math.sign(dx || 1),
+        y: start.y + size * Math.sign(dy || 1),
+      };
+    } else if (type === 'arrow') {
+      // Snap to 45° angles (0, 45, 90, 135, 180, etc.)
+      const angle = Math.atan2(dy, dx);
+      const snapAngle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
+      const length = Math.sqrt(dx * dx + dy * dy);
+      return {
+        x: start.x + length * Math.cos(snapAngle),
+        y: start.y + length * Math.sin(snapAngle),
+      };
+    }
+    return end;
   };
 
   // Hit detection - find annotation at point
@@ -346,6 +415,17 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
             }
           }
           break;
+
+        case 'callout':
+          if (annotation.position) {
+            const calloutRadius = 14;
+            const dx = point.x - annotation.position.x;
+            const dy = point.y - annotation.position.y;
+            if (Math.sqrt(dx * dx + dy * dy) <= calloutRadius + hitPadding) {
+              return annotation;
+            }
+          }
+          break;
       }
     }
     return null;
@@ -366,10 +446,110 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     return Math.sqrt((p.x - projX) ** 2 + (p.y - projY) ** 2);
   };
 
+  // Get resize handles for an annotation (only for resizable types)
+  const getResizeHandles = (annotation: Annotation): { handle: ResizeHandle; point: Point }[] => {
+    if (!['rectangle', 'circle', 'arrow'].includes(annotation.type)) {
+      return [];
+    }
+
+    if (!annotation.start || !annotation.end) return [];
+
+    const minX = Math.min(annotation.start.x, annotation.end.x);
+    const maxX = Math.max(annotation.start.x, annotation.end.x);
+    const minY = Math.min(annotation.start.y, annotation.end.y);
+    const maxY = Math.max(annotation.start.y, annotation.end.y);
+    const midX = (minX + maxX) / 2;
+    const midY = (minY + maxY) / 2;
+
+    if (annotation.type === 'arrow') {
+      // For arrows, just show start and end handles
+      return [
+        { handle: 'nw', point: annotation.start },
+        { handle: 'se', point: annotation.end },
+      ];
+    }
+
+    return [
+      { handle: 'nw', point: { x: minX, y: minY } },
+      { handle: 'n', point: { x: midX, y: minY } },
+      { handle: 'ne', point: { x: maxX, y: minY } },
+      { handle: 'e', point: { x: maxX, y: midY } },
+      { handle: 'se', point: { x: maxX, y: maxY } },
+      { handle: 's', point: { x: midX, y: maxY } },
+      { handle: 'sw', point: { x: minX, y: maxY } },
+      { handle: 'w', point: { x: minX, y: midY } },
+    ];
+  };
+
+  // Check if a point is on a resize handle
+  const findResizeHandleAtPoint = (point: Point, annotation: Annotation): ResizeHandle | null => {
+    const handles = getResizeHandles(annotation);
+    const handleRadius = 6;
+
+    for (const { handle, point: handlePoint } of handles) {
+      const dx = point.x - handlePoint.x;
+      const dy = point.y - handlePoint.y;
+      if (Math.sqrt(dx * dx + dy * dy) <= handleRadius) {
+        return handle;
+      }
+    }
+    return null;
+  };
+
+  // Resize annotation based on handle drag
+  const resizeAnnotation = (annotation: Annotation, handle: ResizeHandle, delta: Point): Annotation => {
+    if (!annotation.start || !annotation.end) return annotation;
+
+    let newStart = { ...annotation.start };
+    let newEnd = { ...annotation.end };
+
+    // For arrow, nw controls start, se controls end
+    if (annotation.type === 'arrow') {
+      if (handle === 'nw') {
+        newStart = { x: annotation.start.x + delta.x, y: annotation.start.y + delta.y };
+      } else if (handle === 'se') {
+        newEnd = { x: annotation.end.x + delta.x, y: annotation.end.y + delta.y };
+      }
+    } else {
+      // For rectangles and circles
+      switch (handle) {
+        case 'nw':
+          newStart = { x: annotation.start.x + delta.x, y: annotation.start.y + delta.y };
+          break;
+        case 'n':
+          newStart = { ...annotation.start, y: annotation.start.y + delta.y };
+          break;
+        case 'ne':
+          newStart = { ...annotation.start, y: annotation.start.y + delta.y };
+          newEnd = { ...annotation.end, x: annotation.end.x + delta.x };
+          break;
+        case 'e':
+          newEnd = { ...annotation.end, x: annotation.end.x + delta.x };
+          break;
+        case 'se':
+          newEnd = { x: annotation.end.x + delta.x, y: annotation.end.y + delta.y };
+          break;
+        case 's':
+          newEnd = { ...annotation.end, y: annotation.end.y + delta.y };
+          break;
+        case 'sw':
+          newStart = { ...annotation.start, x: annotation.start.x + delta.x };
+          newEnd = { ...annotation.end, y: annotation.end.y + delta.y };
+          break;
+        case 'w':
+          newStart = { ...annotation.start, x: annotation.start.x + delta.x };
+          break;
+      }
+    }
+
+    return { ...annotation, start: newStart, end: newEnd };
+  };
+
   // Get center point of an annotation (for calculating drag offset)
   const getAnnotationCenter = (annotation: Annotation): Point => {
     switch (annotation.type) {
       case 'text':
+      case 'callout':
         return annotation.position || { x: 0, y: 0 };
       case 'draw':
         if (annotation.points && annotation.points.length > 0) {
@@ -393,6 +573,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
   const moveAnnotation = (annotation: Annotation, delta: Point): Annotation => {
     switch (annotation.type) {
       case 'text':
+      case 'callout':
         return {
           ...annotation,
           position: annotation.position
@@ -416,6 +597,16 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
         };
     }
   };
+
+  // Duplicate annotation with offset
+  const duplicateAnnotation = useCallback((annotation: Annotation): Annotation => {
+    const offset = 20; // Offset in pixels
+    const newAnnotation = moveAnnotation(annotation, { x: offset, y: offset });
+    return {
+      ...newAnnotation,
+      id: `annotation-${Date.now()}`,
+    };
+  }, []);
 
   // Erase stroke points near a given point (for stroke eraser mode)
   const eraseStrokeAtPoint = useCallback((point: Point) => {
@@ -473,11 +664,29 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
 
     // Handle move tool
     if (selectedTool === 'move') {
+      // First, check if clicking on a resize handle of the selected annotation
+      if (selectedAnnotationId) {
+        const selectedAnnotation = annotations.find((a) => a.id === selectedAnnotationId);
+        if (selectedAnnotation) {
+          const handle = findResizeHandleAtPoint(point, selectedAnnotation);
+          if (handle) {
+            setResizingHandle(handle);
+            setResizeStartPoint(point);
+            setOriginalAnnotation({ ...selectedAnnotation });
+            return;
+          }
+        }
+      }
+
+      // Then check for hit on any annotation
       const hitAnnotation = findAnnotationAtPoint(point);
       if (hitAnnotation) {
+        setSelectedAnnotationId(hitAnnotation.id);
         setDraggingId(hitAnnotation.id);
         const center = getAnnotationCenter(hitAnnotation);
         setDragOffset({ x: point.x - center.x, y: point.y - center.y });
+      } else {
+        setSelectedAnnotationId(null);
       }
       return;
     }
@@ -485,6 +694,23 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     if (selectedTool === 'text') {
       setTextInput({ visible: true, position: point });
       setTimeout(() => textInputRef.current?.focus(), 0);
+      return;
+    }
+
+    // Handle callout tool - instant placement with auto-incrementing number
+    if (selectedTool === 'callout') {
+      const newAnnotation: Annotation = {
+        id: `annotation-${Date.now()}`,
+        type: 'callout',
+        color: selectedColor,
+        strokeWidth: brushSize,
+        opacity: opacity,
+        position: point,
+        calloutNumber: calloutCounter,
+      };
+      setAnnotations((prev) => [...prev, newAnnotation]);
+      setCalloutCounter((prev) => prev + 1);
+      setRedoStack([]); // Clear redo stack on new annotation
       return;
     }
 
@@ -519,6 +745,19 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       return;
     }
 
+    // Handle resizing annotation
+    if (resizingHandle && resizeStartPoint && originalAnnotation) {
+      const delta = {
+        x: point.x - resizeStartPoint.x,
+        y: point.y - resizeStartPoint.y,
+      };
+      const resized = resizeAnnotation(originalAnnotation, resizingHandle, delta);
+      setAnnotations((prev) =>
+        prev.map((a) => (a.id === originalAnnotation.id ? resized : a))
+      );
+      return;
+    }
+
     // Handle dragging annotation
     if (draggingId) {
       const annotation = annotations.find((a) => a.id === draggingId);
@@ -543,9 +782,13 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
         points: [...(currentAnnotation.points || []), point],
       });
     } else {
+      // Apply constraint if Shift is held
+      const constrainedPoint = isShiftHeld && currentAnnotation.start
+        ? constrainPoint(currentAnnotation.start, point, currentAnnotation.type)
+        : point;
       setCurrentAnnotation({
         ...currentAnnotation,
-        end: point,
+        end: constrainedPoint,
       });
     }
   };
@@ -553,6 +796,13 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
   const handleMouseUp = () => {
     if (isErasing) {
       setIsErasing(false);
+      return;
+    }
+
+    if (resizingHandle) {
+      setResizingHandle(null);
+      setResizeStartPoint(null);
+      setOriginalAnnotation(null);
       return;
     }
 
@@ -627,6 +877,18 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       return stack.slice(0, -1);
     });
   }, []);
+
+  // Handle duplicate selected annotation (Ctrl+D)
+  const handleDuplicate = useCallback(() => {
+    if (!selectedAnnotationId) return;
+    const annotation = annotations.find((a) => a.id === selectedAnnotationId);
+    if (annotation) {
+      const duplicated = duplicateAnnotation(annotation);
+      setAnnotations((prev) => [...prev, duplicated]);
+      setSelectedAnnotationId(duplicated.id);
+      setRedoStack([]); // Clear redo stack on new annotation
+    }
+  }, [selectedAnnotationId, annotations, duplicateAnnotation]);
 
   const handleClearAll = useCallback(() => {
     setAnnotations([]);
@@ -723,6 +985,27 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     return () => window.removeEventListener('resize', handleResize);
   }, [resizeCanvas, redrawCanvas]);
 
+  // Track Shift key for constraining shapes
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        setIsShiftHeld(true);
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        setIsShiftHeld(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
   // Cursor based on tool
   const getCursor = () => {
     switch (selectedTool) {
@@ -739,11 +1022,39 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     }
   };
 
+  // Cursor for resize handles
+  const getCursorForHandle = (handle: ResizeHandle): string => {
+    switch (handle) {
+      case 'nw':
+      case 'se':
+        return 'nwse-resize';
+      case 'ne':
+      case 'sw':
+        return 'nesw-resize';
+      case 'n':
+      case 's':
+        return 'ns-resize';
+      case 'e':
+      case 'w':
+        return 'ew-resize';
+      default:
+        return 'pointer';
+    }
+  };
+
   // Should show brush preview cursor
   const showBrushPreview = cursorPos && (
     selectedTool === 'draw' ||
     (selectedTool === 'eraser' && eraserMode === 'stroke')
   );
+
+  // Get selected annotation for resize handles
+  const selectedAnnotation = selectedAnnotationId
+    ? annotations.find((a) => a.id === selectedAnnotationId)
+    : null;
+  const resizeHandles = selectedAnnotation && selectedTool === 'move'
+    ? getResizeHandles(selectedAnnotation)
+    : [];
 
   return (
     <div
@@ -792,6 +1103,8 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
         onCopy={handleCopy}
         onSave={handleSave}
         onCancel={onClose}
+        onDuplicate={handleDuplicate}
+        canDuplicate={selectedAnnotationId !== null}
         position="top"
       />
 
@@ -839,6 +1152,25 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
             }}
           />
         )}
+
+        {/* Resize Handles for Selected Annotation */}
+        {resizeHandles.map(({ handle, point }) => (
+          <div
+            key={handle}
+            style={{
+              position: 'absolute',
+              left: point.x - 5,
+              top: point.y - 5,
+              width: 10,
+              height: 10,
+              backgroundColor: '#ffffff',
+              border: '2px solid #22C55E',
+              borderRadius: 2,
+              cursor: getCursorForHandle(handle),
+              pointerEvents: 'auto',
+            }}
+          />
+        ))}
 
         {/* Text Input */}
         {textInput.visible && (
@@ -888,7 +1220,9 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
         {' • '}
         <kbd style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>Ctrl+Z</kbd> undo
         {' • '}
-        <kbd style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>Ctrl+Shift+Z</kbd> redo
+        <kbd style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>Ctrl+D</kbd> duplicate
+        {' • '}
+        <kbd style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>Shift</kbd> constrain
       </p>
     </div>
   );

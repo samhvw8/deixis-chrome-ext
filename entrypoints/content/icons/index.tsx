@@ -398,6 +398,37 @@ export const ZoomResetIcon: React.FC<IconProps> = ({ size = 20, className = '' }
   </svg>
 );
 
+/**
+ * Callout icon (numbered circle for step-by-step instructions)
+ */
+export const CalloutIcon: React.FC<IconProps> = ({ size = 20, className = '' }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 20 20"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <circle cx="10" cy="10" r="7" />
+    <text
+      x="10"
+      y="14"
+      textAnchor="middle"
+      fill="currentColor"
+      stroke="none"
+      fontSize="10"
+      fontWeight="bold"
+      fontFamily="system-ui, sans-serif"
+    >
+      1
+    </text>
+  </svg>
+);
+
 export default {
   MoveIcon,
   PencilIcon,
@@ -418,4 +449,5 @@ export default {
   ZoomInIcon,
   ZoomOutIcon,
   ZoomResetIcon,
+  CalloutIcon,
 };

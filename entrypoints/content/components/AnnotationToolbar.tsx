@@ -16,9 +16,10 @@ import {
   CopyIcon,
   DownloadIcon,
   CloseIcon,
+  CalloutIcon,
 } from '../icons';
 
-export type AnnotationTool = 'move' | 'draw' | 'rectangle' | 'circle' | 'arrow' | 'text' | 'eraser';
+export type AnnotationTool = 'move' | 'draw' | 'rectangle' | 'circle' | 'arrow' | 'text' | 'eraser' | 'callout';
 
 export interface AnnotationToolbarProps {
   /** Currently selected tool */
@@ -75,6 +76,10 @@ export interface AnnotationToolbarProps {
   onSave: () => void;
   /** Callback for cancel action */
   onCancel: () => void;
+  /** Callback for duplicate action */
+  onDuplicate?: () => void;
+  /** Whether duplicate is available (annotation selected) */
+  canDuplicate?: boolean;
   /** Position of toolbar */
   position?: 'top' | 'bottom';
   /** Custom className */
@@ -124,6 +129,8 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
   onCopy,
   onSave,
   onCancel,
+  onDuplicate,
+  canDuplicate = false,
   position = 'top',
   className = ''
 }) => {
@@ -180,6 +187,12 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
             onToolChange('text');
           }
           break;
+        case 'c':
+          if (!isMeta) {
+            event.preventDefault();
+            onToolChange('callout');
+          }
+          break;
         case 'x':
           if (!isMeta) {
             event.preventDefault();
@@ -201,6 +214,12 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
             onRedo();
           }
           break;
+        case 'd':
+          if (isMeta && canDuplicate && onDuplicate) {
+            event.preventDefault();
+            onDuplicate();
+          }
+          break;
         case 'escape':
           event.preventDefault();
           onCancel();
@@ -210,7 +229,7 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onToolChange, onUndo, onRedo, onCancel, canUndo, canRedo]);
+  }, [onToolChange, onUndo, onRedo, onCancel, onDuplicate, canUndo, canRedo, canDuplicate]);
 
   const handleCopy = useCallback(() => {
     onCopy();
@@ -229,6 +248,7 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
     { id: 'circle', icon: <CircleIcon />, tooltip: 'Ellipse', shortcut: 'E' },
     { id: 'arrow', icon: <ArrowIcon />, tooltip: 'Arrow', shortcut: 'A' },
     { id: 'text', icon: <TypeIcon />, tooltip: 'Text', shortcut: 'T' },
+    { id: 'callout', icon: <CalloutIcon />, tooltip: 'Callout', shortcut: 'C' },
     { id: 'eraser', icon: <EraserIcon />, tooltip: 'Eraser', shortcut: 'X' },
   ];
 
