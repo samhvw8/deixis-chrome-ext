@@ -2,7 +2,7 @@
 
 > Chrome Extension for Visual Annotation in Gemini Chat
 
-**Version:** 1.1 (Phase 1 - Implemented)
+**Version:** 1.2 (Phase 1 - Implemented)
 **Last Updated:** January 2026
 
 ---
@@ -13,18 +13,22 @@
 |---------|--------|-------|
 | Context Menu Entry | Implemented | Right-click "Annotate with Deixis" |
 | Freehand Draw | Implemented | With configurable brush size |
-| Rectangle Tool | Implemented | With optional fill color |
-| Circle/Ellipse Tool | Implemented | With optional fill color |
-| Arrow Tool | Implemented | With arrowhead |
+| Rectangle Tool | Implemented | With optional fill color, shift for squares |
+| Circle/Ellipse Tool | Implemented | With optional fill color, shift for circles |
+| Arrow Tool | Implemented | With arrowhead, shift for 45° angles |
 | Text Label | Implemented | With background color & outline options |
+| Number/Callout Tool | Implemented | Auto-incrementing numbered circles (C hotkey) |
 | Move Tool | Implemented | Drag existing annotations |
+| Duplicate Annotation | Implemented | Ctrl+D to duplicate selected annotation |
+| Resize/Scale Annotations | Implemented | Resize handles on selected annotations |
+| Snap to Grid/Constraints | Implemented | Shift key for squares, circles, 45° angles |
 | Eraser Tool | Implemented | Object mode & stroke mode |
 | Color Picker | Implemented | Preset + custom color picker |
 | Undo | Implemented | Ctrl+Z keyboard shortcut |
 | Clear All | Implemented | Removes all annotations |
 | Copy to Clipboard | Implemented | With toast notification |
 | Save/Download | Implemented | PNG format |
-| Keyboard Shortcuts | Implemented | Photoshop-style (V, B, U, E, A, T, X) |
+| Keyboard Shortcuts | Implemented | Photoshop-style (V, B, U, E, A, T, C, X) |
 
 ---
 
@@ -122,6 +126,7 @@ THEN a rectangle appears from start point to end point
 AND rectangle has outline with stroke width matching brush size setting
 AND rectangle can optionally have fill color (configurable via fill toggle)
 AND fill color matches the currently selected color when enabled
+AND holding Shift while dragging constrains the rectangle to a perfect square
 ```
 
 #### FR-5: Circle/Ellipse Tool (Hotkey: E)
@@ -132,6 +137,7 @@ THEN an ellipse appears within the drag bounds
 AND ellipse has outline with stroke width matching brush size setting
 AND ellipse can optionally have fill color (configurable via fill toggle)
 AND fill color matches the currently selected color when enabled
+AND holding Shift while dragging constrains the ellipse to a perfect circle
 ```
 
 #### FR-6: Arrow Tool (Hotkey: A)
@@ -141,6 +147,7 @@ WHEN user selects Arrow tool and drags on image
 THEN an arrow appears from start point to end point
 AND arrowhead points to the end position
 AND stroke width matches brush size setting
+AND holding Shift while dragging snaps the arrow angle to 45° increments (0°, 45°, 90°, 135°, 180°, etc.)
 ```
 
 #### FR-7: Text Label (Hotkey: T)
@@ -155,16 +162,38 @@ AND text supports optional background color
 AND text supports optional outline with configurable width
 ```
 
-#### FR-7a: Move Tool (Hotkey: V)
+#### FR-7a: Number/Callout Tool (Hotkey: C)
+```
+GIVEN annotation mode is active
+WHEN user selects Callout tool and clicks on image
+THEN a filled circle with auto-incrementing number appears at click position
+AND the number increments automatically (1, 2, 3, ...) for each new callout
+AND callout is styled with filled background, white text, and border
+AND callouts are useful for creating step-by-step instructions or marking multiple points for AI
+```
+
+#### FR-7b: Move Tool (Hotkey: V)
 ```
 GIVEN annotation mode is active
 WHEN user selects Move tool
 THEN cursor changes to grab cursor
 AND clicking on any annotation selects it for dragging
 AND dragging moves the annotation to new position
+AND selected annotations display resize handles (8 for rectangles/circles, 2 for arrows)
+AND dragging resize handles scales/resizes the annotation
 ```
 
-#### FR-7b: Eraser Tool (Hotkey: X)
+#### FR-7c: Duplicate Annotation (Hotkey: Ctrl+D)
+```
+GIVEN annotation mode is active
+AND user has selected an annotation with Move tool
+WHEN user presses Ctrl+D
+THEN the selected annotation is duplicated
+AND the duplicate is offset by 20 pixels horizontally and vertically
+AND the duplicate becomes the new selected annotation
+```
+
+#### FR-7d: Eraser Tool (Hotkey: X)
 ```
 GIVEN annotation mode is active
 WHEN user selects Eraser tool
@@ -267,13 +296,13 @@ AND nothing is saved or copied
 | Auto-attach to Gemini chat input | Technical complexity; defer to Phase 2 |
 | Image editing (crop, filter, brightness) | This is an annotation tool, not an editor |
 | Layer management | Phase 2 scope |
-| Scale/resize existing annotations | MVP uses undo instead; Phase 2 |
+| Scale/resize existing annotations | Implemented in v1.2 |
 | Annotation history/save | Not needed for MVP |
 | Cross-device sync | Not needed for MVP |
 | Support for sites other than Gemini | Focus on Gemini first |
 | Mobile support | Desktop Chrome only |
 
-**Note:** Move tool was originally out of scope but has been implemented in v1.1.
+**Note:** Move tool, resize/scale annotations, duplicate functionality, callout tool, and snap-to-grid constraints were originally out of scope but have been implemented in v1.2.
 
 ---
 
@@ -303,7 +332,10 @@ AND nothing is saved or copied
 | E | Ellipse tool |
 | A | Arrow tool |
 | T | Text tool |
+| C | Number/Callout tool |
 | X | Eraser tool |
+| Shift | Snap to grid (perfect squares/circles, 45° arrows) |
+| Ctrl+D | Duplicate selected annotation |
 | Ctrl+Z | Undo |
 | Escape | Cancel/Close |
 
@@ -395,9 +427,10 @@ AND nothing is saved or copied
 If Phase 1 validates the core hypothesis, Phase 2 will add:
 
 - **Layer system** — for precise manual adjustments
-- **Move/scale objects** — when AI can't achieve exact positioning
 - **Standalone web app** — for complex editing workflows
 - **Auto-attach to chat** — seamless integration with Gemini input
+
+**Note:** Move/scale objects was originally planned for Phase 2 but has been implemented in v1.2.
 
 ---
 
@@ -414,6 +447,15 @@ User draws arrow from object pointing left → Prompts "Move this to where the a
 
 ### Use Case 4: Resize Request
 User draws larger rectangle around small text → Labels "Make text fill this area"
+
+### Use Case 5: Step-by-Step Instructions
+User places numbered callouts (1, 2, 3, 4) on different parts of interface → Prompts "Follow these steps in order: 1) Click here, 2) Enter text here, 3) Select this option, 4) Submit"
+
+### Use Case 6: Precise Alignment
+User draws arrow while holding Shift to snap to 45° angle → Prompts "Move this element in the exact direction of the arrow"
+
+### Use Case 7: Duplicate Patterns
+User creates one annotation marking desired style, then duplicates it (Ctrl+D) multiple times → Prompts "Apply this same effect to all marked areas"
 
 ---
 
