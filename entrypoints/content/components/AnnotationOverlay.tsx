@@ -613,6 +613,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
   };
 
   // Resize annotation based on handle drag
+  // For rotated annotations, we keep the anchor corner visually fixed
   const resizeAnnotation = (
     annotation: Annotation,
     handle: ResizeHandle,
@@ -622,7 +623,6 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     if (!annotation.start || !annotation.end) return annotation;
 
     const rotation = annotation.rotation || 0;
-    const oldCenter = getAnnotationCenter(annotation);
 
     // Transform screen delta to local (unrotated) space
     const cos = Math.cos(-rotation);
@@ -642,71 +642,135 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       return annotation;
     }
 
-    // For rectangles and circles, apply delta to the appropriate edges
-    let newStart = { ...annotation.start };
-    let newEnd = { ...annotation.end };
+    // For non-rotated annotations, use simple resize
+    if (rotation === 0) {
+      let newStart = { ...annotation.start };
+      let newEnd = { ...annotation.end };
 
-    // Determine which edges to move based on handle
-    switch (handle) {
-      case 'nw':
-        newStart = { x: annotation.start.x + localDelta.x, y: annotation.start.y + localDelta.y };
-        break;
-      case 'n':
-        newStart = { ...annotation.start, y: annotation.start.y + localDelta.y };
-        break;
-      case 'ne':
-        newStart = { ...annotation.start, y: annotation.start.y + localDelta.y };
-        newEnd = { ...annotation.end, x: annotation.end.x + localDelta.x };
-        break;
-      case 'e':
-        newEnd = { ...annotation.end, x: annotation.end.x + localDelta.x };
-        break;
-      case 'se':
-        newEnd = { x: annotation.end.x + localDelta.x, y: annotation.end.y + localDelta.y };
-        break;
-      case 's':
-        newEnd = { ...annotation.end, y: annotation.end.y + localDelta.y };
-        break;
-      case 'sw':
-        newStart = { ...annotation.start, x: annotation.start.x + localDelta.x };
-        newEnd = { ...annotation.end, y: annotation.end.y + localDelta.y };
-        break;
-      case 'w':
-        newStart = { ...annotation.start, x: annotation.start.x + localDelta.x };
-        break;
+      switch (handle) {
+        case 'nw':
+          newStart = { x: annotation.start.x + localDelta.x, y: annotation.start.y + localDelta.y };
+          break;
+        case 'n':
+          newStart = { ...annotation.start, y: annotation.start.y + localDelta.y };
+          break;
+        case 'ne':
+          newStart = { ...annotation.start, y: annotation.start.y + localDelta.y };
+          newEnd = { ...annotation.end, x: annotation.end.x + localDelta.x };
+          break;
+        case 'e':
+          newEnd = { ...annotation.end, x: annotation.end.x + localDelta.x };
+          break;
+        case 'se':
+          newEnd = { x: annotation.end.x + localDelta.x, y: annotation.end.y + localDelta.y };
+          break;
+        case 's':
+          newEnd = { ...annotation.end, y: annotation.end.y + localDelta.y };
+          break;
+        case 'sw':
+          newStart = { ...annotation.start, x: annotation.start.x + localDelta.x };
+          newEnd = { ...annotation.end, y: annotation.end.y + localDelta.y };
+          break;
+        case 'w':
+          newStart = { ...annotation.start, x: annotation.start.x + localDelta.x };
+          break;
+      }
+
+      return { ...annotation, start: newStart, end: newEnd };
     }
 
-    // For rotated annotations, compensate for center shift to keep anchor corner fixed
-    if (rotation !== 0) {
-      // Calculate new center after resize
-      const newCenter = {
-        x: (newStart.x + newEnd.x) / 2,
-        y: (newStart.y + newEnd.y) / 2,
-      };
+    // For rotated annotations, calculate new bounds keeping anchor corner fixed
+    const oldCenter = getAnnotationCenter(annotation);
+    const anchorHandle = getAnchorHandle(handle);
 
-      // Get the anchor corner's local position after resize
-      const anchorHandle = getAnchorHandle(handle);
-      const anchorLocalPos = getLocalCorner({ ...annotation, start: newStart, end: newEnd }, anchorHandle);
-      if (!anchorLocalPos) return { ...annotation, start: newStart, end: newEnd };
+    // Get anchor corner in local space (this won't change)
+    const anchorLocal = getLocalCorner(annotation, anchorHandle);
+    if (!anchorLocal) return annotation;
 
-      // Calculate where the anchor corner would appear in visual space after resize
-      const anchorNewVisualPos = rotatePoint(anchorLocalPos, newCenter, rotation);
+    // The anchor's visual position must stay at anchorVisualPos
+    // We need to find newCenter such that:
+    //   rotatePoint(anchorLocal, newCenter, rotation) = anchorVisualPos
+    //
+    // Solving for newCenter:
+    //   anchorVisualPos = newCenter + rotate(anchorLocal - newCenter, rotation)
+    //   anchorVisualPos - newCenter = rotate(anchorLocal - newCenter, rotation)
+    //
+    // Let d = anchorLocal - newCenter (in local coords, this is the offset from center to anchor)
+    // Then: anchorVisualPos = newCenter + rotate(d, rotation)
+    //
+    // For the anchor to stay fixed, we need the offset from center to anchor to be correct.
+    // The anchor's local position relative to start/end determines where it is.
 
-      // Calculate offset needed to keep anchor at its original visual position
-      const offset = {
-        x: anchorVisualPos.x - anchorNewVisualPos.x,
-        y: anchorVisualPos.y - anchorNewVisualPos.y,
-      };
+    // Get the dragged corner and calculate its new local position
+    const draggedLocal = getLocalCorner(annotation, handle);
+    if (!draggedLocal) return annotation;
 
-      // Convert offset to local space and apply to both start and end
-      const localOffset = {
-        x: offset.x * cos - offset.y * sin,
-        y: offset.x * sin + offset.y * cos,
-      };
+    const newDraggedLocal = {
+      x: draggedLocal.x + localDelta.x,
+      y: draggedLocal.y + localDelta.y,
+    };
 
-      newStart = { x: newStart.x + localOffset.x, y: newStart.y + localOffset.y };
-      newEnd = { x: newEnd.x + localOffset.x, y: newEnd.y + localOffset.y };
+    // For edge handles, only one dimension of the dragged point changes
+    let adjustedDraggedLocal = { ...newDraggedLocal };
+    if (handle === 'n' || handle === 's') {
+      adjustedDraggedLocal.x = draggedLocal.x; // Keep X same
+    } else if (handle === 'e' || handle === 'w') {
+      adjustedDraggedLocal.y = draggedLocal.y; // Keep Y same
     }
+
+    // Calculate new bounds based on anchor (fixed) and dragged (moved) corners
+    let newStart: Point;
+    let newEnd: Point;
+
+    // Determine new start and end from anchor and dragged positions
+    const minX = Math.min(anchorLocal.x, adjustedDraggedLocal.x);
+    const maxX = Math.max(anchorLocal.x, adjustedDraggedLocal.x);
+    const minY = Math.min(anchorLocal.y, adjustedDraggedLocal.y);
+    const maxY = Math.max(anchorLocal.y, adjustedDraggedLocal.y);
+
+    // For edge handles, preserve the perpendicular dimension
+    if (handle === 'n') {
+      newStart = { x: annotation.start.x, y: minY };
+      newEnd = { x: annotation.end.x, y: maxY };
+    } else if (handle === 's') {
+      newStart = { x: annotation.start.x, y: minY };
+      newEnd = { x: annotation.end.x, y: maxY };
+    } else if (handle === 'e') {
+      newStart = { x: minX, y: annotation.start.y };
+      newEnd = { x: maxX, y: annotation.end.y };
+    } else if (handle === 'w') {
+      newStart = { x: minX, y: annotation.start.y };
+      newEnd = { x: maxX, y: annotation.end.y };
+    } else {
+      // Corner handles: both dimensions change
+      newStart = { x: minX, y: minY };
+      newEnd = { x: maxX, y: maxY };
+    }
+
+    // Calculate new center
+    const newCenter = {
+      x: (newStart.x + newEnd.x) / 2,
+      y: (newStart.y + newEnd.y) / 2,
+    };
+
+    // Calculate where anchor would appear with new center
+    const anchorNewVisualPos = rotatePoint(anchorLocal, newCenter, rotation);
+
+    // Calculate the translation needed to keep anchor at original visual position
+    const visualOffset = {
+      x: anchorVisualPos.x - anchorNewVisualPos.x,
+      y: anchorVisualPos.y - anchorNewVisualPos.y,
+    };
+
+    // Convert visual offset to local offset
+    const localOffset = {
+      x: visualOffset.x * cos - visualOffset.y * sin,
+      y: visualOffset.x * sin + visualOffset.y * cos,
+    };
+
+    // Apply the translation
+    newStart = { x: newStart.x + localOffset.x, y: newStart.y + localOffset.y };
+    newEnd = { x: newEnd.x + localOffset.x, y: newEnd.y + localOffset.y };
 
     return { ...annotation, start: newStart, end: newEnd };
   };
