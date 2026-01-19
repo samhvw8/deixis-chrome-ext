@@ -64,7 +64,8 @@ export const geminiAdapter: SiteAdapter = {
       position: 'prepend',
       showOnHover: false,
       style: {
-        marginRight: '16px',
+        position: 'relative',
+        marginRight: '8px',
       },
     };
   },
