@@ -32,8 +32,8 @@ export default defineConfig({
     },
   }),
   manifest: {
-    name: 'Deixis - Visual Annotation for Gemini',
-    description: 'Draw visual annotations on images in Gemini chat to communicate intent precisely',
+    name: 'Deixis - Visual Annotation for AI',
+    description: 'Annotate images in AI chats. Show what you mean instead of describing it with words.',
     version: '0.3.1',
     permissions: ['activeTab', 'contextMenus', 'clipboardWrite', 'tabs', 'storage'],
     host_permissions: [
