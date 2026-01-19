@@ -56,7 +56,6 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
   const [textBgColor, setTextBgColor] = useState<string | null>('rgba(0, 0, 0, 0.7)');
   const [textOutlineColor, setTextOutlineColor] = useState<string | null>(null);
   const [textOutlineWidth, setTextOutlineWidth] = useState(2);
-  const [eraserMode, setEraserMode] = useState<'object' | 'stroke'>('object');
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [redoStack, setRedoStack] = useState<Annotation[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -109,9 +108,6 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
   // Rotation state
   const [isRotating, setIsRotating] = useState(false);
   const [rotationStartAngle, setRotationStartAngle] = useState(0);
-
-  // Eraser state
-  const [isErasing, setIsErasing] = useState(false);
 
   // Cursor preview state
   const [cursorPos, setCursorPos] = useState<Point | null>(null);
@@ -865,56 +861,15 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     };
   }, []);
 
-  // Erase stroke points near a given point (for stroke eraser mode)
-  const eraseStrokeAtPoint = useCallback((point: Point) => {
-    const eraseRadius = 10; // Pixels radius for erasing
-
-    setAnnotations((prev) => {
-      return prev
-        .map((annotation) => {
-          if (annotation.type !== 'draw' || !annotation.points) {
-            return annotation;
-          }
-
-          // Filter out points that are within eraseRadius of the cursor
-          const newPoints = annotation.points.filter((p) => {
-            const dx = p.x - point.x;
-            const dy = p.y - point.y;
-            return Math.sqrt(dx * dx + dy * dy) > eraseRadius;
-          });
-
-          // If no points left, return null to remove this annotation
-          if (newPoints.length === 0) {
-            return null;
-          }
-
-          // If we removed some points, return updated annotation
-          if (newPoints.length !== annotation.points.length) {
-            return { ...annotation, points: newPoints };
-          }
-
-          return annotation;
-        })
-        .filter((a): a is Annotation => a !== null);
-    });
-  }, []);
-
   // Mouse handlers
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const point = getCanvasPoint(e);
 
-    // Handle eraser tool
+    // Handle eraser tool - delete entire annotation on click
     if (selectedTool === 'eraser') {
-      if (eraserMode === 'object') {
-        // Object mode: delete entire annotation on click
-        const hitAnnotation = findAnnotationAtPoint(point);
-        if (hitAnnotation) {
-          setAnnotations((prev) => prev.filter((a) => a.id !== hitAnnotation.id));
-        }
-      } else {
-        // Stroke mode: start erasing
-        setIsErasing(true);
-        eraseStrokeAtPoint(point);
+      const hitAnnotation = findAnnotationAtPoint(point);
+      if (hitAnnotation) {
+        setAnnotations((prev) => prev.filter((a) => a.id !== hitAnnotation.id));
       }
       return;
     }
@@ -1020,12 +975,6 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       setCursorPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
     }
 
-    // Handle stroke erasing
-    if (isErasing && selectedTool === 'eraser' && eraserMode === 'stroke') {
-      eraseStrokeAtPoint(point);
-      return;
-    }
-
     // Skip if rotating or resizing - window-level handlers manage these
     if (isRotating || resizingHandle) {
       return;
@@ -1067,11 +1016,6 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
   };
 
   const handleMouseUp = () => {
-    if (isErasing) {
-      setIsErasing(false);
-      return;
-    }
-
     // Skip if rotating or resizing - window-level handlers manage these
     if (isRotating || resizingHandle) {
       return;
@@ -1350,7 +1294,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       case 'text':
         return 'text';
       case 'eraser':
-        return eraserMode === 'stroke' ? 'none' : 'crosshair';
+        return 'crosshair';
       default:
         return 'crosshair';
     }
@@ -1396,10 +1340,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
   };
 
   // Should show brush preview cursor
-  const showBrushPreview = cursorPos && (
-    selectedTool === 'draw' ||
-    (selectedTool === 'eraser' && eraserMode === 'stroke')
-  );
+  const showBrushPreview = cursorPos && selectedTool === 'draw';
 
   // Get selected annotation for resize handles
   const selectedAnnotation = selectedAnnotationId
@@ -1448,8 +1389,6 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
         onTextOutlineWidthChange={setTextOutlineWidth}
         fillColor={fillColor}
         onFillColorChange={setFillColor}
-        eraserMode={eraserMode}
-        onEraserModeChange={setEraserMode}
         canUndo={annotations.length > 0}
         onUndo={handleUndo}
         canRedo={redoStack.length > 0}

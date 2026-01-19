@@ -54,10 +54,6 @@ export interface AnnotationToolbarProps {
   fillColor: string | null;
   /** Callback when fill color changes */
   onFillColorChange: (color: string | null) => void;
-  /** Eraser mode: 'object' deletes whole annotation, 'stroke' erases parts of strokes */
-  eraserMode: 'object' | 'stroke';
-  /** Callback when eraser mode changes */
-  onEraserModeChange: (mode: 'object' | 'stroke') => void;
   /** Whether undo is available */
   canUndo: boolean;
   /** Callback for undo action */
@@ -118,8 +114,6 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
   onTextOutlineWidthChange,
   fillColor,
   onFillColorChange,
-  eraserMode,
-  onEraserModeChange,
   canUndo,
   onUndo,
   canRedo,
@@ -492,45 +486,6 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
               )}
             </div>
           </>
-        )}
-
-        {/* Eraser Mode Toggle - only shown for eraser tool */}
-        {selectedTool === 'eraser' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 8 }}>
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>Mode:</span>
-            <button
-              type="button"
-              onClick={() => onEraserModeChange('object')}
-              style={{
-                padding: '4px 8px',
-                borderRadius: 4,
-                border: eraserMode === 'object' ? '2px solid #fff' : '1px solid rgba(255,255,255,0.3)',
-                background: eraserMode === 'object' ? 'rgba(255,255,255,0.2)' : 'transparent',
-                cursor: 'pointer',
-                fontSize: 11,
-                color: eraserMode === 'object' ? '#fff' : 'rgba(255,255,255,0.6)',
-              }}
-              title="Delete entire annotation"
-            >
-              Object
-            </button>
-            <button
-              type="button"
-              onClick={() => onEraserModeChange('stroke')}
-              style={{
-                padding: '4px 8px',
-                borderRadius: 4,
-                border: eraserMode === 'stroke' ? '2px solid #fff' : '1px solid rgba(255,255,255,0.3)',
-                background: eraserMode === 'stroke' ? 'rgba(255,255,255,0.2)' : 'transparent',
-                cursor: 'pointer',
-                fontSize: 11,
-                color: eraserMode === 'stroke' ? '#fff' : 'rgba(255,255,255,0.6)',
-              }}
-              title="Erase parts of strokes"
-            >
-              Stroke
-            </button>
-          </div>
         )}
 
         {/* Divider */}
