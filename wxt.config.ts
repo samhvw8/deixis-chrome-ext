@@ -34,7 +34,7 @@ export default defineConfig({
   manifest: {
     name: 'Deixis - Visual Annotation for Gemini',
     description: 'Draw visual annotations on images in Gemini chat to communicate intent precisely',
-    version: '1.0.0',
+    version: '0.3.1',
     permissions: ['activeTab', 'contextMenus', 'clipboardWrite', 'tabs', 'storage'],
     host_permissions: [
       '<all_urls>',
