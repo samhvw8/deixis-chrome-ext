@@ -753,8 +753,12 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       y: (newStart.y + newEnd.y) / 2,
     };
 
+    // Get anchor position in the NEW bounds (may differ from anchorLocal for edge handles)
+    const newAnchorLocal = getLocalCorner({ ...annotation, start: newStart, end: newEnd }, anchorHandle);
+    if (!newAnchorLocal) return { ...annotation, start: newStart, end: newEnd };
+
     // Calculate where anchor would appear with new center
-    const anchorNewVisualPos = rotatePoint(anchorLocal, newCenter, rotation);
+    const anchorNewVisualPos = rotatePoint(newAnchorLocal, newCenter, rotation);
 
     // Calculate the translation needed to keep anchor at original visual position
     const visualOffset = {
