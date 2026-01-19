@@ -1,6 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { siteAdapters } from '@/src/core/adapters/registry';
 
+// Annotation colors - same as in ColorPicker.tsx
+const ANNOTATION_COLORS = [
+  { value: '#22C55E', name: 'Green' },
+  { value: '#EF4444', name: 'Red' },
+  { value: '#3B82F6', name: 'Blue' },
+  { value: '#EAB308', name: 'Yellow' },
+  { value: '#F97316', name: 'Orange' },
+  { value: '#A855F7', name: 'Purple' },
+  { value: '#06B6D4', name: 'Cyan' },
+  { value: '#FFFFFF', name: 'White' },
+];
+
 // Icons as SVG components with explicit sizing
 const RefreshIcon = () => (
   <svg
@@ -94,21 +106,27 @@ const RefreshPageIcon = () => (
 
 type Theme = 'light' | 'dark';
 
+const DEFAULT_COLOR = '#22C55E'; // Green
+
 function App() {
   const [loggingEnabled, setLoggingEnabled] = useState(false);
   const [theme, setTheme] = useState<Theme>('dark');
+  const [defaultColor, setDefaultColor] = useState(DEFAULT_COLOR);
 
   // Git version injected at build time (e.g., "v0.3.0-beta-4-g56fe0ce")
   const version = __GIT_VERSION__;
 
   // Load initial state
   useEffect(() => {
-    // Get logging state and theme from storage
-    browser.storage.local.get(['loggingEnabled', 'theme']).then((result) => {
+    // Get logging state, theme, and default color from storage
+    browser.storage.local.get(['loggingEnabled', 'theme', 'defaultBrushColor']).then((result) => {
       setLoggingEnabled(result.loggingEnabled ?? false);
       const savedTheme = result.theme ?? 'dark';
       setTheme(savedTheme);
-      document.documentElement.setAttribute('data-theme', savedTheme);
+      document.documentElement.dataset.theme = savedTheme;
+      if (result.defaultBrushColor) {
+        setDefaultColor(result.defaultBrushColor);
+      }
     });
   }, []);
 
@@ -142,8 +160,14 @@ function App() {
   const handleThemeToggle = async () => {
     const newTheme: Theme = theme === 'dark' ? 'light' : 'dark';
     setTheme(newTheme);
-    document.documentElement.setAttribute('data-theme', newTheme);
+    document.documentElement.dataset.theme = newTheme;
     await browser.storage.local.set({ theme: newTheme });
+  };
+
+  // Handle color change
+  const handleColorChange = async (color: string) => {
+    setDefaultColor(color);
+    await browser.storage.local.set({ defaultBrushColor: color });
   };
 
   return (
@@ -196,7 +220,7 @@ function App() {
           </button>
 
           {/* Logging Toggle */}
-          <label className="toggle-row">
+          <div className="toggle-row">
             <span className="toggle-label">Enable Logging</span>
             <button
               role="switch"
@@ -206,7 +230,53 @@ function App() {
             >
               <span className="toggle-thumb" />
             </button>
-          </label>
+          </div>
+        </div>
+      </section>
+
+      {/* Settings Section */}
+      <section className="popup-section">
+        <h2 className="section-title">Settings</h2>
+
+        <div className="section-content">
+          {/* Default Brush Color */}
+          <div className="color-picker-row">
+            <span className="color-picker-label">Default Brush Color</span>
+            <div className="color-picker-controls">
+              {/* Preset color swatches */}
+              <div className="color-swatches">
+                {ANNOTATION_COLORS.map((color) => (
+                  <button
+                    key={color.value}
+                    className={`color-swatch ${defaultColor === color.value ? 'selected' : ''}`}
+                    style={{
+                      backgroundColor: color.value,
+                      boxShadow: color.value === '#FFFFFF' ? 'inset 0 0 0 1px rgba(0,0,0,0.2)' : 'none',
+                    }}
+                    onClick={() => handleColorChange(color.value)}
+                    title={color.name}
+                    aria-label={color.name}
+                  />
+                ))}
+              </div>
+              {/* Custom color picker */}
+              <div className="custom-color-picker">
+                <input
+                  type="color"
+                  value={defaultColor}
+                  onChange={(e) => handleColorChange(e.target.value)}
+                  title="Pick custom color"
+                  aria-label="Pick custom color"
+                />
+                <span
+                  className="rainbow-indicator"
+                  style={{
+                    background: 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)',
+                  }}
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 

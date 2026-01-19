@@ -66,6 +66,17 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     position: { x: 0, y: 0 },
   });
 
+  // Load default brush color from storage
+  useEffect(() => {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      chrome.storage.local.get(['defaultBrushColor']).then((result) => {
+        if (result.defaultBrushColor) {
+          setSelectedColor(result.defaultBrushColor);
+        }
+      });
+    }
+  }, []);
+
   // Callout counter for auto-incrementing numbers
   const [calloutCounter, setCalloutCounter] = useState(1);
 
