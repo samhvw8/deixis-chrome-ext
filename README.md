@@ -1,9 +1,13 @@
-# Deixis - Visual Annotation Chrome Extension
+# Deixis - Visual Annotation for AI
 
-**Version:** 0.3.0-beta
-**Description:** Draw visual annotations on AI-generated images to communicate intent precisely across multiple AI platforms.
+> **Stop describing. Start pointing.**
 
-Deixis (Greek: "to show, to point out") is a Chrome extension that enables precise visual communication through freehand drawings, shapes, and text annotations directly on images in AI chat interfaces.
+**Version:** 0.3.1
+**Tagline:** Annotate images in AI chats. Show what you mean instead of describing it with words.
+
+Ever tried to describe "that small thing in the upper-left corner behind the other thing"? Deixis ends the guessing game. Draw directly on images in AI chat interfaces to show exactly what you mean—circle the object you want removed, arrow to the spot that needs fixing, highlight the area that should change.
+
+Deixis (Greek: "to show, to point out") is a Chrome extension that enables precise visual communication through freehand drawings, shapes, and annotations directly on images across multiple AI platforms.
 
 ---
 
@@ -262,7 +266,14 @@ bun run zip
 
 ---
 
-## Recent Fixes (v0.3.0-beta)
+## Recent Changes (v0.3.1)
+
+- **Git-based versioning** - Popup displays version from git tags
+- **Reload Extension + Page** - One-click reload for development workflow
+- **Light/Dark theme toggle** - Popup respects user preference
+- **Updated branding** - New tagline and multi-platform focus
+
+## Previous Release (v0.3.0-beta)
 
 This release focuses on the extensible architecture and critical rotation/resize fixes:
 
