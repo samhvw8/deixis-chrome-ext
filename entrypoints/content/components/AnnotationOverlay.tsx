@@ -766,11 +766,10 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       y: anchorVisualPos.y - anchorNewVisualPos.y,
     };
 
-    // Convert visual offset to local offset
-    const localOffset = {
-      x: visualOffset.x * cos - visualOffset.y * sin,
-      y: visualOffset.x * sin + visualOffset.y * cos,
-    };
+    // Since rotation is applied around the center, and both anchor and center
+    // move by the same local offset, the visual movement equals the local movement.
+    // Therefore: localOffset = visualOffset (no rotation transformation needed)
+    const localOffset = visualOffset;
 
     // Apply the translation
     newStart = { x: newStart.x + localOffset.x, y: newStart.y + localOffset.y };
