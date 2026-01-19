@@ -96,16 +96,14 @@ type Theme = 'light' | 'dark';
 
 function App() {
   const [loggingEnabled, setLoggingEnabled] = useState(false);
-  const [version, setVersion] = useState('');
   const [theme, setTheme] = useState<Theme>('dark');
+
+  // Git version injected at build time (e.g., "v0.3.0-beta-4-g56fe0ce")
+  const version = __GIT_VERSION__;
 
   // Load initial state
   useEffect(() => {
-    // Get version from manifest
-    const manifest = browser.runtime.getManifest();
-    setVersion(manifest.version);
-
-    // Get logging state from storage
+    // Get logging state and theme from storage
     browser.storage.local.get(['loggingEnabled', 'theme']).then((result) => {
       setLoggingEnabled(result.loggingEnabled ?? false);
       const savedTheme = result.theme ?? 'dark';
@@ -164,7 +162,7 @@ function App() {
           >
             {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
           </button>
-          <span className="popup-version">v{version}</span>
+          <span className="popup-version">{version}</span>
         </div>
       </header>
 

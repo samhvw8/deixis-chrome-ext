@@ -1,6 +1,17 @@
 import { defineConfig } from 'wxt';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
+import { execSync } from 'node:child_process';
+
+// Get git version info at build time
+function getGitVersion(): string {
+  try {
+    // git describe gives: v0.3.0-beta-4-g56fe0ce (tag-commits-hash)
+    return execSync('git describe --tags --always', { encoding: 'utf-8' }).trim();
+  } catch {
+    return 'dev';
+  }
+}
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
@@ -11,6 +22,9 @@ export default defineConfig({
         jsxRuntime: 'classic',
       }),
     ],
+    define: {
+      __GIT_VERSION__: JSON.stringify(getGitVersion()),
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
