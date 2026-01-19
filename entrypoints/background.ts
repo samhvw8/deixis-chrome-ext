@@ -1,16 +1,19 @@
 /**
  * Deixis Background Script
  * Handles context menu registration and message passing
+ * Uses adapter registry for dynamic URL patterns
  */
 
+import { getAllMatches } from '../src/core/adapters/registry';
+
 export default defineBackground(() => {
-  // Create context menu on install
+  // Create context menu on install with all supported site patterns
   browser.runtime.onInstalled.addListener(() => {
     browser.contextMenus.create({
       id: 'deixis-annotate',
       title: 'Annotate with Deixis',
       contexts: ['image'],
-      documentUrlPatterns: ['https://gemini.google.com/*'],
+      documentUrlPatterns: getAllMatches(),
     });
   });
 
@@ -28,7 +31,7 @@ export default defineBackground(() => {
   // Handle messages from content script
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'DEIXIS_READY') {
-      console.log('Deixis content script ready on:', sender.tab?.url);
+      console.log('Deixis content script ready on:', sender.tab?.url, 'adapter:', message.adapterId);
       sendResponse({ status: 'ok' });
       return true;
     }
