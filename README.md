@@ -15,7 +15,6 @@ Deixis (Greek: "to show, to point out") is a Chrome extension that enables preci
 
 - **Multi-Site Support** - Works across multiple AI platforms with an extensible adapter architecture
   - Currently supported: Google Gemini
-  - Easy to extend: Add support for new sites in ~50-100 lines of code
 
 - **Comprehensive Annotation Tools**
   - Freehand drawing with smooth stroke rendering
