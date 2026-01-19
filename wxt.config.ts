@@ -19,7 +19,7 @@ export default defineConfig({
   vite: () => ({
     plugins: [
       react({
-        jsxRuntime: 'automatic',
+        jsxRuntime: 'classic',
       }),
     ],
     define: {
