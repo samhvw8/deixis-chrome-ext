@@ -243,9 +243,9 @@ function App() {
           <div className="color-picker-row">
             <span className="color-picker-label">Default Brush Color</span>
             <div className="color-picker-controls">
-              {/* Preset color swatches */}
+              {/* Preset color swatches - show custom color in last slot if selected */}
               <div className="color-swatches">
-                {ANNOTATION_COLORS.map((color) => (
+                {ANNOTATION_COLORS.slice(0, -1).map((color) => (
                   <button
                     key={color.value}
                     className={`color-swatch ${defaultColor === color.value ? 'selected' : ''}`}
@@ -258,22 +258,38 @@ function App() {
                     aria-label={color.name}
                   />
                 ))}
-              </div>
-              {/* Custom color picker */}
-              <div className="custom-color-picker">
-                <input
-                  type="color"
-                  value={defaultColor}
-                  onChange={(e) => handleColorChange(e.target.value)}
-                  title="Pick custom color"
-                  aria-label="Pick custom color"
-                />
-                <span
-                  className="rainbow-indicator"
-                  style={{
-                    background: 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)',
-                  }}
-                />
+                {/* Last slot: show custom color if non-preset, otherwise show White */}
+                {(() => {
+                  const isCustomColor = !ANNOTATION_COLORS.some(c => c.value === defaultColor);
+                  const lastPreset = ANNOTATION_COLORS[ANNOTATION_COLORS.length - 1];
+                  const displayColor = isCustomColor ? defaultColor : lastPreset.value;
+                  const displayName = isCustomColor ? 'Custom' : lastPreset.name;
+                  const isSelected = isCustomColor || defaultColor === lastPreset.value;
+
+                  return (
+                    <div className="color-swatch-with-picker">
+                      <button
+                        className={`color-swatch ${isSelected ? 'selected' : ''}`}
+                        style={{
+                          backgroundColor: displayColor,
+                          boxShadow: displayColor === '#FFFFFF' ? 'inset 0 0 0 1px rgba(0,0,0,0.2)' : 'none',
+                        }}
+                        onClick={() => !isCustomColor && handleColorChange(lastPreset.value)}
+                        title={displayName}
+                        aria-label={displayName}
+                      />
+                      {/* Hidden color input overlaid on last swatch */}
+                      <input
+                        type="color"
+                        className="color-swatch-input"
+                        value={defaultColor}
+                        onChange={(e) => handleColorChange(e.target.value)}
+                        title="Pick custom color"
+                        aria-label="Pick custom color"
+                      />
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>

@@ -66,14 +66,27 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     position: { x: 0, y: 0 },
   });
 
-  // Load default brush color from storage
+  // Load default brush color from storage and listen for changes
   useEffect(() => {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      // Load initial value
       chrome.storage.local.get(['defaultBrushColor']).then((result) => {
         if (result.defaultBrushColor) {
           setSelectedColor(result.defaultBrushColor);
         }
       });
+
+      // Listen for changes from popup
+      const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }) => {
+        if (changes.defaultBrushColor?.newValue) {
+          setSelectedColor(changes.defaultBrushColor.newValue);
+        }
+      };
+
+      chrome.storage.onChanged.addListener(handleStorageChange);
+      return () => {
+        chrome.storage.onChanged.removeListener(handleStorageChange);
+      };
     }
   }, []);
 

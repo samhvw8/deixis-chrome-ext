@@ -430,41 +430,30 @@ body {
   box-shadow: 0 0 0 2px var(--surface-primary), 0 0 0 4px var(--text-primary);
 }
 
-.custom-color-picker {
+.color-swatch-with-picker {
   position: relative;
   width: 24px;
   height: 24px;
-  border-radius: 50%;
-  overflow: hidden;
-  cursor: pointer;
-  border: 2px solid var(--border-visible);
 }
 
-.custom-color-picker input[type="color"] {
-  position: absolute;
-  top: -4px;
-  left: -4px;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: none;
-  cursor: pointer;
-  opacity: 0;
+.color-swatch-with-picker .color-swatch {
+  width: 100%;
+  height: 100%;
 }
 
-.custom-color-picker .rainbow-indicator {
+.color-swatch-input {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  border-radius: 50%;
-  pointer-events: none;
+  opacity: 0;
+  cursor: pointer;
+  border: none;
+  padding: 0;
 }
 
-.custom-color-picker:hover {
-  transform: scale(1.1);
-}
+/* Remove old custom-color-picker styles - replaced by inline swatch */
 
 /* ============================================
    Reduced Motion

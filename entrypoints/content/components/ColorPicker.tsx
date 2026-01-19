@@ -214,7 +214,8 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
           role="listbox"
           aria-label="Select annotation color"
         >
-          {colors.map((color) => (
+          {/* Show first 7 preset colors */}
+          {colors.slice(0, -1).map((color) => (
             <button
               key={color.value}
               type="button"
@@ -241,62 +242,63 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
               title={color.name}
             />
           ))}
-          {/* Custom color picker */}
-          <div
-            className="deixis-color-swatch deixis-custom-color"
-            title="Custom color"
-            onMouseDown={(e) => e.stopPropagation()}
-            style={{
-              position: 'relative',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              overflow: 'hidden',
-            }}
-          >
-            <input
-              type="color"
-              value={selectedColor}
-              onInput={(e) => {
-                // Real-time color update while dragging
-                e.stopPropagation();
-                const target = e.target as HTMLInputElement;
-                console.log('[Deixis] Color dragging:', target.value);
-                onColorChange(target.value);
-              }}
-              onChange={(e) => {
-                // Final color selection - just update color, don't close dropdown
-                // Let user close via click-outside, Escape, or tool change
-                e.stopPropagation();
-                onColorChange(e.target.value);
-              }}
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                width: 32,
-                height: 32,
-                padding: 0,
-                border: 'none',
-                cursor: 'pointer',
-                background: 'transparent',
-                // Hide the default input appearance but keep it functional
-                WebkitAppearance: 'none',
-                MozAppearance: 'none',
-              }}
-            />
-            {/* Rainbow overlay (visual only) */}
-            <span
-              style={{
-                position: 'absolute',
-                top: 2,
-                left: 2,
-                width: 20,
-                height: 20,
-                borderRadius: '50%',
-                background: 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)',
-                pointerEvents: 'none',
-              }}
-            />
-          </div>
+          {/* Last slot: show custom color if non-preset, otherwise show last preset (White) */}
+          {(() => {
+            const isCustomColor = !colors.some(c => c.value === selectedColor);
+            const lastPreset = colors[colors.length - 1];
+            const displayColor = isCustomColor ? selectedColor : lastPreset.value;
+            const displayName = isCustomColor ? 'Custom' : lastPreset.name;
+            const isSelected = isCustomColor || selectedColor === lastPreset.value;
+
+            return (
+              <div
+                className="deixis-color-swatch deixis-custom-color"
+                title={displayName}
+                onMouseDown={(e) => e.stopPropagation()}
+                style={{
+                  position: 'relative',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  backgroundColor: displayColor,
+                  boxShadow: displayColor === '#FFFFFF' ? 'inset 0 0 0 1px rgba(0,0,0,0.2)' : 'none',
+                }}
+                data-selected={isSelected}
+              >
+                <input
+                  type="color"
+                  value={selectedColor}
+                  onInput={(e) => {
+                    e.stopPropagation();
+                    const target = e.target as HTMLInputElement;
+                    onColorChange(target.value);
+                  }}
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    onColorChange(e.target.value);
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!isCustomColor) {
+                      handleColorSelect(lastPreset.value);
+                    }
+                  }}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    padding: 0,
+                    border: 'none',
+                    cursor: 'pointer',
+                    opacity: 0,
+                  }}
+                />
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>
