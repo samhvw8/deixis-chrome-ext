@@ -73,6 +73,25 @@ const MoonIcon = () => (
   </svg>
 );
 
+const RefreshPageIcon = () => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+    <path d="M3 3v5h5" />
+    <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+    <path d="M16 16h5v5" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
 type Theme = 'light' | 'dark';
 
 function App() {
@@ -95,8 +114,22 @@ function App() {
     });
   }, []);
 
-  // Handle reload extension
+  // Handle reload extension only
   const handleReload = () => {
+    browser.runtime.reload();
+  };
+
+  // Handle reload extension + current page
+  const handleReloadWithPage = async () => {
+    // Get current active tab
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id) {
+      // Save tab ID for background script to reload after extension restarts
+      await browser.storage.local.set({
+        pendingTabReload: { tabId: tab.id, timestamp: Date.now() }
+      });
+    }
+    // Reload extension (this closes popup immediately)
     browser.runtime.reload();
   };
 
@@ -144,12 +177,24 @@ function App() {
           <button
             onClick={handleReload}
             className="action-button"
-            title="Reload the extension to apply changes"
+            title="Reload extension only"
           >
             <span className="action-icon">
               <RefreshIcon />
             </span>
             <span>Reload Extension</span>
+          </button>
+
+          {/* Reload Extension + Page Button */}
+          <button
+            onClick={handleReloadWithPage}
+            className="action-button"
+            title="Reload extension and refresh current page"
+          >
+            <span className="action-icon">
+              <RefreshPageIcon />
+            </span>
+            <span>Reload Extension + Page</span>
           </button>
 
           {/* Logging Toggle */}

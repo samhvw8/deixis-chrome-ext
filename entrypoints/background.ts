@@ -7,6 +7,25 @@
 import { getAllMatches } from '../src/core/adapters/registry';
 
 export default defineBackground(() => {
+  // On startup, check if we need to reload a tab (after extension reload)
+  browser.storage.local.get('pendingTabReload').then(async (result) => {
+    const pending = result.pendingTabReload as { tabId: number; timestamp: number } | undefined;
+    if (pending) {
+      const { tabId, timestamp } = pending;
+      // Only reload if the flag was set within the last 5 seconds
+      if (Date.now() - timestamp < 5000) {
+        try {
+          await browser.tabs.reload(tabId);
+          console.log('[Deixis BG] Reloaded tab after extension restart:', tabId);
+        } catch (error) {
+          console.log('[Deixis BG] Could not reload tab:', error);
+        }
+      }
+      // Clear the flag
+      await browser.storage.local.remove('pendingTabReload');
+    }
+  });
+
   // Create context menu on install with all supported site patterns
   browser.runtime.onInstalled.addListener(() => {
     browser.contextMenus.create({
