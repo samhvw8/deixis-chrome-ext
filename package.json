@@ -2,7 +2,7 @@
   "name": "deixis",
   "description": "Chrome Extension for Visual Annotation in Gemini Chat",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.3.0-beta",
   "type": "module",
   "scripts": {
     "dev": "wxt",
