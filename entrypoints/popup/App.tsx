@@ -35,9 +35,50 @@ const CheckIcon = () => (
   </svg>
 );
 
+const SunIcon = () => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2" />
+    <path d="M12 20v2" />
+    <path d="m4.93 4.93 1.41 1.41" />
+    <path d="m17.66 17.66 1.41 1.41" />
+    <path d="M2 12h2" />
+    <path d="M20 12h2" />
+    <path d="m6.34 17.66-1.41 1.41" />
+    <path d="m19.07 4.93-1.41 1.41" />
+  </svg>
+);
+
+const MoonIcon = () => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+  </svg>
+);
+
+type Theme = 'light' | 'dark';
+
 function App() {
   const [loggingEnabled, setLoggingEnabled] = useState(false);
   const [version, setVersion] = useState('');
+  const [theme, setTheme] = useState<Theme>('dark');
 
   // Load initial state
   useEffect(() => {
@@ -46,8 +87,11 @@ function App() {
     setVersion(manifest.version);
 
     // Get logging state from storage
-    browser.storage.local.get('loggingEnabled').then((result) => {
+    browser.storage.local.get(['loggingEnabled', 'theme']).then((result) => {
       setLoggingEnabled(result.loggingEnabled ?? false);
+      const savedTheme = result.theme ?? 'dark';
+      setTheme(savedTheme);
+      document.documentElement.setAttribute('data-theme', savedTheme);
     });
   }, []);
 
@@ -63,12 +107,32 @@ function App() {
     await browser.storage.local.set({ loggingEnabled: newValue });
   };
 
+  // Handle theme toggle
+  const handleThemeToggle = async () => {
+    const newTheme: Theme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+    document.documentElement.setAttribute('data-theme', newTheme);
+    await browser.storage.local.set({ theme: newTheme });
+  };
+
   return (
     <div className="popup-container">
       {/* Header */}
       <header className="popup-header">
-        <h1 className="popup-title">DEIXIS</h1>
-        <span className="popup-version">v{version}</span>
+        <div className="header-left">
+          <h1 className="popup-title">DEIXIS</h1>
+        </div>
+        <div className="header-right">
+          <button
+            onClick={handleThemeToggle}
+            className="theme-toggle"
+            title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+            aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+          >
+            {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+          </button>
+          <span className="popup-version">v{version}</span>
+        </div>
       </header>
 
       {/* Developer Tools Section */}

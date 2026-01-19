@@ -17,23 +17,6 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  /* Colors - Surface */
-  --surface-primary: rgb(24, 24, 27);
-  --surface-hover: rgb(39, 39, 42);
-  --surface-active: rgb(63, 63, 70);
-
-  /* Colors - Border */
-  --border-subtle: rgba(63, 63, 70, 0.8);
-  --border-visible: rgb(82, 82, 91);
-
-  /* Colors - Text */
-  --text-primary: #FAFAFA;
-  --text-secondary: #A1A1AA;
-  --text-muted: #71717A;
-
-  /* Colors - Semantic */
-  --anno-green: #22C55E;
-
   /* Spacing */
   --space-1: 4px;
   --space-2: 8px;
@@ -47,6 +30,49 @@
   /* Animation */
   --ease-smooth: cubic-bezier(0.25, 1, 0.5, 1);
   --duration-fast: 150ms;
+
+  /* Colors - Semantic */
+  --anno-green: #22C55E;
+}
+
+/* ============================================
+   Dark Theme (default)
+   ============================================ */
+
+[data-theme="dark"] {
+  /* Colors - Surface */
+  --surface-primary: rgb(24, 24, 27);
+  --surface-hover: rgb(39, 39, 42);
+  --surface-active: rgb(63, 63, 70);
+
+  /* Colors - Border */
+  --border-subtle: rgba(63, 63, 70, 0.8);
+  --border-visible: rgb(82, 82, 91);
+
+  /* Colors - Text */
+  --text-primary: #FAFAFA;
+  --text-secondary: #A1A1AA;
+  --text-muted: #71717A;
+}
+
+/* ============================================
+   Light Theme
+   ============================================ */
+
+[data-theme="light"] {
+  /* Colors - Surface */
+  --surface-primary: #FFFFFF;
+  --surface-hover: #F4F4F5;
+  --surface-active: #E4E4E7;
+
+  /* Colors - Border */
+  --border-subtle: rgba(228, 228, 231, 0.8);
+  --border-visible: #D4D4D8;
+
+  /* Colors - Text */
+  --text-primary: #18181B;
+  --text-secondary: #52525B;
+  --text-muted: #71717A;
 }
 
 /* Reset */
@@ -88,6 +114,12 @@ body {
   border-bottom: 1px solid var(--border-subtle);
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .popup-title {
   font-size: 13px;
   font-weight: 600;
@@ -101,6 +133,37 @@ body {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background-color: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all var(--duration-fast) var(--ease-smooth);
+}
+
+.theme-toggle:hover {
+  background-color: var(--surface-hover);
+  color: var(--text-primary);
+  border-color: var(--border-visible);
+}
+
+.theme-toggle svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* ============================================
