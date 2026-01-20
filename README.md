@@ -1,8 +1,12 @@
+<p align="center">
+  <img src="public/logo.png" alt="Deixis Logo" width="128">
+</p>
+
 # Deixis - Visual Annotation for AI
 
 > **Stop describing. Start pointing.**
 
-**Version:** 0.3.1
+**Version:** 0.3.2
 **Tagline:** Annotate images in AI chats. Show what you mean instead of describing it with words.
 
 Ever tried to describe "that small thing in the upper-left corner behind the other thing"? Deixis ends the guessing game. Draw directly on images in AI chat interfaces to show exactly what you mean—circle the object you want removed, arrow to the spot that needs fixing, highlight the area that should change.
