@@ -269,7 +269,7 @@ bun run zip
 
 ---
 
-## Recent Changes (v0.3.1)
+## Recent Changes (v0.3.2)
 
 - **Git-based versioning** - Popup displays version from git tags
 - **Reload Extension + Page** - One-click reload for development workflow

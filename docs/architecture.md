@@ -1,6 +1,6 @@
 # Deixis Architecture Documentation
 
-**Version:** 0.3.0-beta
+**Version:** 0.3.2
 **Last Updated:** January 2026
 
 ---
