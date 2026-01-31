@@ -35,6 +35,7 @@ interface Annotation {
   outlineWidth?: number; // For text outline width
   calloutNumber?: number; // For callout annotations
   rotation?: number;     // Rotation angle in radians
+  stamp?: string;        // For stamp annotations (emoji)
 }
 
 /**
@@ -56,6 +57,8 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
   const [textBgColor, setTextBgColor] = useState<string | null>('rgba(0, 0, 0, 0.7)');
   const [textOutlineColor, setTextOutlineColor] = useState<string | null>(null);
   const [textOutlineWidth, setTextOutlineWidth] = useState(2);
+  const [selectedStamp, setSelectedStamp] = useState('✓');
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [redoStack, setRedoStack] = useState<Annotation[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -300,6 +303,89 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
           ctx.fillText(String(annotation.calloutNumber), x, y);
         }
         break;
+
+      case 'line':
+        if (annotation.start && annotation.end) {
+          ctx.beginPath();
+          ctx.moveTo(annotation.start.x, annotation.start.y);
+          ctx.lineTo(annotation.end.x, annotation.end.y);
+          ctx.stroke();
+        }
+        break;
+
+      case 'highlight':
+        if (annotation.start && annotation.end) {
+          const width = annotation.end.x - annotation.start.x;
+          const height = annotation.end.y - annotation.start.y;
+          ctx.globalAlpha = 0.4; // Fixed transparency for highlight
+          ctx.fillStyle = annotation.color;
+          ctx.fillRect(annotation.start.x, annotation.start.y, width, height);
+        }
+        break;
+
+      case 'blur':
+        if (annotation.start && annotation.end) {
+          const x = Math.min(annotation.start.x, annotation.end.x);
+          const y = Math.min(annotation.start.y, annotation.end.y);
+          const w = Math.abs(annotation.end.x - annotation.start.x);
+          const h = Math.abs(annotation.end.y - annotation.start.y);
+
+          if (w > 0 && h > 0) {
+            // Get the image data for the region
+            const imageData = ctx.getImageData(x, y, w, h);
+            const data = imageData.data;
+
+            // Pixelate with 8px blocks
+            const blockSize = 8;
+            for (let blockY = 0; blockY < h; blockY += blockSize) {
+              for (let blockX = 0; blockX < w; blockX += blockSize) {
+                // Calculate average color for this block
+                let r = 0, g = 0, b = 0, count = 0;
+                for (let py = blockY; py < Math.min(blockY + blockSize, h); py++) {
+                  for (let px = blockX; px < Math.min(blockX + blockSize, w); px++) {
+                    const i = (py * w + px) * 4;
+                    r += data[i];
+                    g += data[i + 1];
+                    b += data[i + 2];
+                    count++;
+                  }
+                }
+                r = Math.floor(r / count);
+                g = Math.floor(g / count);
+                b = Math.floor(b / count);
+
+                // Fill the block with average color
+                for (let py = blockY; py < Math.min(blockY + blockSize, h); py++) {
+                  for (let px = blockX; px < Math.min(blockX + blockSize, w); px++) {
+                    const i = (py * w + px) * 4;
+                    data[i] = r;
+                    data[i + 1] = g;
+                    data[i + 2] = b;
+                  }
+                }
+              }
+            }
+
+            ctx.putImageData(imageData, x, y);
+
+            // Draw border to show the blur region
+            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]);
+            ctx.strokeRect(x, y, w, h);
+            ctx.setLineDash([]);
+          }
+        }
+        break;
+
+      case 'stamp':
+        if (annotation.position && annotation.stamp) {
+          ctx.font = '32px -apple-system, BlinkMacSystemFont, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(annotation.stamp, annotation.position.x, annotation.position.y);
+        }
+        break;
     }
     ctx.restore();
   };
@@ -461,6 +547,39 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
             }
           }
           break;
+
+        case 'line':
+          if (annotation.start && annotation.end) {
+            const dist = distanceToLineSegment(point, annotation.start, annotation.end);
+            if (dist < hitPadding) {
+              return annotation;
+            }
+          }
+          break;
+
+        case 'highlight':
+        case 'blur':
+          if (annotation.start && annotation.end) {
+            const minX = Math.min(annotation.start.x, annotation.end.x);
+            const maxX = Math.max(annotation.start.x, annotation.end.x);
+            const minY = Math.min(annotation.start.y, annotation.end.y);
+            const maxY = Math.max(annotation.start.y, annotation.end.y);
+            if (point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY) {
+              return annotation;
+            }
+          }
+          break;
+
+        case 'stamp':
+          if (annotation.position) {
+            const stampRadius = 18; // Approximate hit area for emoji
+            const dx = point.x - annotation.position.x;
+            const dy = point.y - annotation.position.y;
+            if (Math.sqrt(dx * dx + dy * dy) <= stampRadius + hitPadding) {
+              return annotation;
+            }
+          }
+          break;
       }
     }
     return null;
@@ -483,7 +602,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
 
   // Get resize handles for an annotation (only for resizable types)
   const getResizeHandles = (annotation: Annotation): { handle: ResizeHandle; point: Point }[] => {
-    if (!['rectangle', 'circle', 'arrow'].includes(annotation.type)) {
+    if (!['rectangle', 'circle', 'arrow', 'line', 'highlight', 'blur'].includes(annotation.type)) {
       return [];
     }
 
@@ -498,8 +617,8 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
 
     let handles: { handle: ResizeHandle; point: Point }[];
 
-    if (annotation.type === 'arrow') {
-      // For arrows, just show start and end handles
+    if (annotation.type === 'arrow' || annotation.type === 'line') {
+      // For arrows and lines, just show start and end handles
       handles = [
         { handle: 'nw', point: annotation.start },
         { handle: 'se', point: annotation.end },
@@ -551,7 +670,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
 
   // Get rotation handle position (above the top center of the annotation)
   const getRotationHandlePosition = (annotation: Annotation): Point | null => {
-    if (!['rectangle', 'circle', 'arrow'].includes(annotation.type)) {
+    if (!['rectangle', 'circle', 'arrow', 'line', 'highlight', 'blur'].includes(annotation.type)) {
       return null;
     }
 
@@ -951,6 +1070,22 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       };
       setAnnotations((prev) => [...prev, newAnnotation]);
       setCalloutCounter((prev) => prev + 1);
+      setRedoStack([]); // Clear redo stack on new annotation
+      return;
+    }
+
+    // Handle stamp tool - instant placement of emoji
+    if (selectedTool === 'stamp') {
+      const newAnnotation: Annotation = {
+        id: `annotation-${Date.now()}`,
+        type: 'stamp',
+        color: selectedColor,
+        strokeWidth: brushSize,
+        opacity: opacity,
+        position: point,
+        stamp: selectedStamp,
+      };
+      setAnnotations((prev) => [...prev, newAnnotation]);
       setRedoStack([]); // Clear redo stack on new annotation
       return;
     }
@@ -1394,6 +1529,8 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
         onTextOutlineWidthChange={setTextOutlineWidth}
         fillColor={fillColor}
         onFillColorChange={setFillColor}
+        selectedStamp={selectedStamp}
+        onStampChange={setSelectedStamp}
         canUndo={annotations.length > 0}
         onUndo={handleUndo}
         canRedo={redoStack.length > 0}
@@ -1405,6 +1542,8 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
         onCancel={onClose}
         onDuplicate={handleDuplicate}
         canDuplicate={selectedAnnotationId !== null}
+        showShortcuts={showShortcuts}
+        onToggleShortcuts={() => setShowShortcuts(!showShortcuts)}
         position="top"
       />
 
@@ -1580,7 +1719,95 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
         <kbd style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>Ctrl+D</kbd> duplicate
         {' • '}
         <kbd style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>Shift</kbd> constrain
+        {' • '}
+        <kbd style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>?</kbd> shortcuts
       </p>
+
+      {/* Keyboard Shortcuts Panel */}
+      {showShortcuts && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            background: 'rgba(0, 0, 0, 0.95)',
+            borderRadius: 12,
+            padding: 24,
+            border: '1px solid rgba(255,255,255,0.2)',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+            zIndex: 2147483647,
+            fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+            minWidth: 400,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h2 style={{ color: '#fff', margin: 0, fontSize: 18, fontWeight: 600 }}>Keyboard Shortcuts</h2>
+            <button
+              onClick={() => setShowShortcuts(false)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'rgba(255,255,255,0.6)',
+                cursor: 'pointer',
+                fontSize: 20,
+                padding: 4,
+              }}
+            >
+              ×
+            </button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {[
+              { key: 'V', action: 'Move tool' },
+              { key: 'B', action: 'Brush tool' },
+              { key: 'U', action: 'Rectangle' },
+              { key: 'E', action: 'Ellipse' },
+              { key: 'A', action: 'Arrow' },
+              { key: 'L', action: 'Line' },
+              { key: 'T', action: 'Text' },
+              { key: 'C', action: 'Callout' },
+              { key: 'H', action: 'Highlight' },
+              { key: 'R', action: 'Blur/Redact' },
+              { key: 'S', action: 'Stamp' },
+              { key: 'X', action: 'Eraser' },
+              { key: 'Ctrl+Z', action: 'Undo' },
+              { key: 'Ctrl+Shift+Z', action: 'Redo' },
+              { key: 'Ctrl+D', action: 'Duplicate' },
+              { key: 'Shift', action: 'Constrain' },
+              { key: 'Escape', action: 'Cancel' },
+              { key: '?', action: 'This panel' },
+            ].map(({ key, action }) => (
+              <div
+                key={key}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '6px 0',
+                }}
+              >
+                <kbd
+                  style={{
+                    background: 'rgba(255,255,255,0.1)',
+                    padding: '4px 8px',
+                    borderRadius: 4,
+                    color: '#fff',
+                    fontSize: 12,
+                    minWidth: 60,
+                    textAlign: 'center',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                  }}
+                >
+                  {key}
+                </kbd>
+                <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>{action}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

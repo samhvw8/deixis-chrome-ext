@@ -429,6 +429,112 @@ export const CalloutIcon: React.FC<IconProps> = ({ size = 20, className = '' }) 
   </svg>
 );
 
+/**
+ * Blur/Redact icon for privacy tool
+ */
+export const BlurIcon: React.FC<IconProps> = ({ size = 20, className = '' }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 20 20"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <rect x="3" y="3" width="14" height="14" rx="2" />
+    <line x1="6" y1="7" x2="14" y2="7" />
+    <line x1="6" y1="10" x2="14" y2="10" />
+    <line x1="6" y1="13" x2="14" y2="13" />
+  </svg>
+);
+
+/**
+ * Highlight/Marker icon for highlighter tool
+ */
+export const HighlightIcon: React.FC<IconProps> = ({ size = 20, className = '' }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 20 20"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <path d="M14 3L17 6L8 15H3V10L14 3Z" />
+    <path d="M3 17H17" />
+  </svg>
+);
+
+/**
+ * Line icon for straight line tool
+ */
+export const LineIcon: React.FC<IconProps> = ({ size = 20, className = '' }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 20 20"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <line x1="4" y1="16" x2="16" y2="4" />
+  </svg>
+);
+
+/**
+ * Emoji/Stamp icon for quick stamps
+ */
+export const StampIcon: React.FC<IconProps> = ({ size = 20, className = '' }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 20 20"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <circle cx="10" cy="10" r="7" />
+    <path d="M7 8.5C7 8.5 7.5 8 8 8C8.5 8 9 8.5 9 8.5" />
+    <path d="M11 8.5C11 8.5 11.5 8 12 8C12.5 8 13 8.5 13 8.5" />
+    <path d="M7 12C7 12 8 14 10 14C12 14 13 12 13 12" />
+  </svg>
+);
+
+/**
+ * Keyboard/Help icon for shortcuts panel
+ */
+export const KeyboardIcon: React.FC<IconProps> = ({ size = 20, className = '' }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 20 20"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <rect x="2" y="5" width="16" height="10" rx="2" />
+    <line x1="5" y1="8" x2="6" y2="8" />
+    <line x1="9" y1="8" x2="11" y2="8" />
+    <line x1="14" y1="8" x2="15" y2="8" />
+    <line x1="6" y1="12" x2="14" y2="12" />
+  </svg>
+);
+
 export default {
   MoveIcon,
   PencilIcon,
@@ -450,4 +556,9 @@ export default {
   ZoomOutIcon,
   ZoomResetIcon,
   CalloutIcon,
+  BlurIcon,
+  HighlightIcon,
+  LineIcon,
+  StampIcon,
+  KeyboardIcon,
 };

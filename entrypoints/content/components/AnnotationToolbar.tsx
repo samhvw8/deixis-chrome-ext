@@ -17,9 +17,14 @@ import {
   DownloadIcon,
   CloseIcon,
   CalloutIcon,
+  BlurIcon,
+  HighlightIcon,
+  LineIcon,
+  StampIcon,
+  KeyboardIcon,
 } from '../icons';
 
-export type AnnotationTool = 'move' | 'draw' | 'rectangle' | 'circle' | 'arrow' | 'text' | 'eraser' | 'callout';
+export type AnnotationTool = 'move' | 'draw' | 'rectangle' | 'circle' | 'arrow' | 'line' | 'text' | 'eraser' | 'callout' | 'blur' | 'highlight' | 'stamp';
 
 export interface AnnotationToolbarProps {
   /** Currently selected tool */
@@ -54,6 +59,10 @@ export interface AnnotationToolbarProps {
   fillColor: string | null;
   /** Callback when fill color changes */
   onFillColorChange: (color: string | null) => void;
+  /** Currently selected stamp */
+  selectedStamp: string;
+  /** Callback when stamp is selected */
+  onStampChange: (stamp: string) => void;
   /** Whether undo is available */
   canUndo: boolean;
   /** Callback for undo action */
@@ -76,6 +85,10 @@ export interface AnnotationToolbarProps {
   onDuplicate?: () => void;
   /** Whether duplicate is available (annotation selected) */
   canDuplicate?: boolean;
+  /** Whether shortcuts panel is visible */
+  showShortcuts: boolean;
+  /** Callback to toggle shortcuts panel */
+  onToggleShortcuts: () => void;
   /** Position of toolbar */
   position?: 'top' | 'bottom';
   /** Custom className */
@@ -88,12 +101,19 @@ export interface AnnotationToolbarProps {
  * Layout: [Drawing Tools] | [Color Picker] | [Undo/Clear] | [Done/Cancel]
  *
  * Keyboard shortcuts:
- * - D: Draw tool
- * - R: Rectangle tool
- * - C: Circle tool
+ * - V: Move tool
+ * - B: Brush/Draw tool
+ * - U: Rectangle tool
+ * - E: Ellipse tool
  * - A: Arrow tool
+ * - L: Line tool
  * - T: Text tool
+ * - C: Callout tool
+ * - H: Highlight tool
+ * - R: Blur/Redact tool
+ * - S: Stamp tool
  * - X: Eraser tool
+ * - ?: Toggle shortcuts panel
  * - Ctrl/Cmd+Z: Undo
  * - Escape: Cancel
  */
@@ -114,6 +134,8 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
   onTextOutlineWidthChange,
   fillColor,
   onFillColorChange,
+  selectedStamp,
+  onStampChange,
   canUndo,
   onUndo,
   canRedo,
@@ -125,6 +147,8 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
   onCancel,
   onDuplicate,
   canDuplicate = false,
+  showShortcuts,
+  onToggleShortcuts,
   position = 'top',
   className = ''
 }) => {
@@ -175,6 +199,12 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
             onToolChange('arrow');
           }
           break;
+        case 'l':
+          if (!isMeta) {
+            event.preventDefault();
+            onToolChange('line');
+          }
+          break;
         case 't':
           if (!isMeta) {
             event.preventDefault();
@@ -187,11 +217,33 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
             onToolChange('callout');
           }
           break;
+        case 'h':
+          if (!isMeta) {
+            event.preventDefault();
+            onToolChange('highlight');
+          }
+          break;
+        case 'r':
+          if (!isMeta) {
+            event.preventDefault();
+            onToolChange('blur');
+          }
+          break;
+        case 's':
+          if (!isMeta) {
+            event.preventDefault();
+            onToolChange('stamp');
+          }
+          break;
         case 'x':
           if (!isMeta) {
             event.preventDefault();
             onToolChange('eraser');
           }
+          break;
+        case '?':
+          event.preventDefault();
+          onToggleShortcuts();
           break;
         case 'z':
           if (isMeta && !event.shiftKey && canUndo) {
@@ -223,7 +275,7 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onToolChange, onUndo, onRedo, onCancel, onDuplicate, canUndo, canRedo, canDuplicate]);
+  }, [onToolChange, onUndo, onRedo, onCancel, onDuplicate, onToggleShortcuts, canUndo, canRedo, canDuplicate]);
 
   const handleCopy = useCallback(() => {
     onCopy();
@@ -241,8 +293,12 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
     { id: 'rectangle', icon: <SquareIcon />, tooltip: 'Rectangle', shortcut: 'U' },
     { id: 'circle', icon: <CircleIcon />, tooltip: 'Ellipse', shortcut: 'E' },
     { id: 'arrow', icon: <ArrowIcon />, tooltip: 'Arrow', shortcut: 'A' },
+    { id: 'line', icon: <LineIcon />, tooltip: 'Line', shortcut: 'L' },
     { id: 'text', icon: <TypeIcon />, tooltip: 'Text', shortcut: 'T' },
     { id: 'callout', icon: <CalloutIcon />, tooltip: 'Callout', shortcut: 'C' },
+    { id: 'highlight', icon: <HighlightIcon />, tooltip: 'Highlight', shortcut: 'H' },
+    { id: 'blur', icon: <BlurIcon />, tooltip: 'Blur/Redact', shortcut: 'R' },
+    { id: 'stamp', icon: <StampIcon />, tooltip: 'Stamp', shortcut: 'S' },
     { id: 'eraser', icon: <EraserIcon />, tooltip: 'Eraser', shortcut: 'X' },
   ];
 
@@ -488,6 +544,35 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
           </>
         )}
 
+        {/* Stamp Selector - shown for stamp tool */}
+        {selectedTool === 'stamp' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 8 }}>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>Stamp:</span>
+            {['✓', '✗', '?', '⭐', '❗', '❤️', '👍', '👎'].map((stamp) => (
+              <button
+                key={stamp}
+                type="button"
+                onClick={() => onStampChange(stamp)}
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 4,
+                  border: selectedStamp === stamp ? '2px solid #fff' : '1px solid rgba(255,255,255,0.3)',
+                  background: selectedStamp === stamp ? 'rgba(255,255,255,0.2)' : 'transparent',
+                  cursor: 'pointer',
+                  fontSize: 16,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                title={stamp}
+              >
+                {stamp}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Divider */}
         <div className="deixis-divider" role="separator" />
 
@@ -512,6 +597,13 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
             tooltip="Clear All"
             onClick={onClearAll}
             disabled={!canClear}
+          />
+          <ToolButton
+            icon={<KeyboardIcon />}
+            tooltip="Keyboard Shortcuts"
+            shortcut="?"
+            onClick={onToggleShortcuts}
+            isActive={showShortcuts}
           />
         </div>
 
