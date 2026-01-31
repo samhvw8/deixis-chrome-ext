@@ -928,6 +928,11 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     }
 
     if (selectedTool === 'text') {
+      // Don't create new text input if one is already visible
+      // (blur will handle saving the current text)
+      if (textInput.visible) {
+        return;
+      }
       setTextInput({ visible: true, position: point });
       setTimeout(() => textInputRef.current?.focus(), 0);
       return;
