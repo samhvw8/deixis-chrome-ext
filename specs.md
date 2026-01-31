@@ -2,7 +2,7 @@
 
 > Chrome Extension for Visual Annotation in Gemini Chat
 
-**Version:** 1.2 (Phase 1 - Implemented)
+**Version:** 1.3 (Phase 1 - Quick Wins Update)
 **Last Updated:** January 2026
 
 ---
@@ -16,8 +16,12 @@
 | Rectangle Tool | Implemented | With optional fill color, shift for squares |
 | Circle/Ellipse Tool | Implemented | With optional fill color, shift for circles |
 | Arrow Tool | Implemented | With arrowhead, shift for 45° angles |
+| Line Tool | Implemented | Straight lines, shift for 45° angles (L hotkey) |
 | Text Label | Implemented | With background color & outline options |
 | Number/Callout Tool | Implemented | Auto-incrementing numbered circles (C hotkey) |
+| Highlight Tool | Implemented | Semi-transparent marker for highlighting (H hotkey) |
+| Blur/Redact Tool | Implemented | Pixelation for hiding sensitive content (R hotkey) |
+| Stamp Tool | Implemented | Quick emoji stamps ✓ ✗ ? ⭐ ❗ ❤️ 👍 👎 (S hotkey) |
 | Move Tool | Implemented | Drag existing annotations |
 | Duplicate Annotation | Implemented | Ctrl+D to duplicate selected annotation |
 | Resize/Scale Annotations | Implemented | Resize handles on selected annotations |
@@ -29,7 +33,8 @@
 | Clear All | Implemented | Removes all annotations |
 | Copy to Clipboard | Implemented | With toast notification |
 | Save/Download | Implemented | PNG format |
-| Keyboard Shortcuts | Implemented | Photoshop-style (V, B, U, E, A, T, C, X) |
+| Keyboard Shortcuts | Implemented | Photoshop-style (V, B, U, E, A, L, T, C, H, R, S, X) |
+| Keyboard Shortcuts Panel | Implemented | Press ? to show all shortcuts |
 
 ---
 
@@ -211,12 +216,58 @@ Stroke Mode:
 #### FR-7e: Rotate Annotations
 ```
 GIVEN annotation mode is active
-AND user has selected an annotation with Move tool (rectangle, circle, or arrow)
+AND user has selected an annotation with Move tool (rectangle, circle, arrow, line, highlight, or blur)
 WHEN user drags the rotation handle (blue circular handle above the annotation)
 THEN the annotation rotates around its center point
 AND the rotation handle position updates dynamically as the annotation rotates
 AND holding Shift while rotating snaps to 15° increments (0°, 15°, 30°, 45°, 60°, etc.)
 AND rotation is applied using canvas transforms when drawing the annotation
+```
+
+#### FR-7f: Line Tool (Hotkey: L)
+```
+GIVEN annotation mode is active
+WHEN user selects Line tool and drags on image
+THEN a straight line appears from start point to end point
+AND stroke width matches brush size setting
+AND holding Shift while dragging snaps the line angle to 45° increments
+```
+
+#### FR-7g: Highlight Tool (Hotkey: H)
+```
+GIVEN annotation mode is active
+WHEN user selects Highlight tool and drags on image
+THEN a semi-transparent rectangle appears with 40% opacity
+AND the highlight uses the selected color
+AND highlight is useful for marking text or areas that need attention
+```
+
+#### FR-7h: Blur/Redact Tool (Hotkey: R)
+```
+GIVEN annotation mode is active
+WHEN user selects Blur tool and drags on image
+THEN a pixelated/mosaic effect is applied to the selected rectangular region
+AND the blur uses 8px block size for effective redaction
+AND a dashed border shows the blur region boundary
+AND this tool is useful for hiding sensitive information (PII, passwords, etc.)
+```
+
+#### FR-7i: Stamp Tool (Hotkey: S)
+```
+GIVEN annotation mode is active
+WHEN user selects Stamp tool
+THEN a stamp selector appears in the toolbar with options: ✓ ✗ ? ⭐ ❗ ❤️ 👍 👎
+AND clicking on the canvas places the selected stamp at that position
+AND stamps are useful for quick feedback annotations
+```
+
+#### FR-7j: Keyboard Shortcuts Panel (Hotkey: ?)
+```
+GIVEN annotation mode is active
+WHEN user presses ? key or clicks the keyboard icon in toolbar
+THEN a modal overlay appears showing all available keyboard shortcuts
+AND the panel can be closed by pressing ? again, clicking X, or clicking outside
+AND this improves discoverability of keyboard shortcuts
 ```
 
 ### Color & Editing
@@ -343,12 +394,18 @@ AND nothing is saved or copied
 | U | Rectangle tool |
 | E | Ellipse tool |
 | A | Arrow tool |
+| L | Line tool |
 | T | Text tool |
 | C | Number/Callout tool |
+| H | Highlight tool |
+| R | Blur/Redact tool |
+| S | Stamp tool |
 | X | Eraser tool |
-| Shift | Snap to grid (perfect squares/circles, 45° arrows, 15° rotation) |
+| ? | Keyboard shortcuts panel |
+| Shift | Snap to grid (perfect squares/circles, 45° angles, 15° rotation) |
 | Ctrl+D | Duplicate selected annotation |
 | Ctrl+Z | Undo |
+| Ctrl+Shift+Z | Redo |
 | Escape | Cancel/Close |
 
 ### Accessibility
