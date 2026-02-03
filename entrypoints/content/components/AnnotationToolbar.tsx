@@ -1,7 +1,6 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ToolButton } from './ToolButton';
 import { ColorPicker, ANNOTATION_COLORS } from './ColorPicker';
-import { Toast, useToast } from './Toast';
 import {
   MoveIcon,
   PencilIcon,
@@ -152,7 +151,7 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
   position = 'top',
   className = ''
 }) => {
-  const { toastProps, showToast } = useToast();
+  const [savedFeedback, setSavedFeedback] = useState<'copy' | 'download' | null>(null);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -279,13 +278,15 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
 
   const handleCopy = useCallback(() => {
     onCopy();
-    showToast('Copied to clipboard', 'success');
-  }, [onCopy, showToast]);
+    setSavedFeedback('copy');
+    setTimeout(() => setSavedFeedback(null), 1500);
+  }, [onCopy]);
 
   const handleSave = useCallback(() => {
     onSave();
-    showToast('Image saved', 'success');
-  }, [onSave, showToast]);
+    setSavedFeedback('download');
+    setTimeout(() => setSavedFeedback(null), 1500);
+  }, [onSave]);
 
   const tools: { id: AnnotationTool; icon: React.ReactNode; tooltip: string; shortcut: string }[] = [
     { id: 'move', icon: <MoveIcon />, tooltip: 'Move', shortcut: 'V' },
@@ -617,6 +618,9 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
             tooltip="Save"
             onClick={handleSave}
           />
+          {savedFeedback === 'download' && (
+            <span style={{ color: '#22C55E', fontSize: 12, fontWeight: 500 }}>Saved</span>
+          )}
           <button
             type="button"
             className="deixis-btn deixis-btn-secondary"
@@ -635,11 +639,12 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
             <CopyIcon size={16} />
             <span>Copy</span>
           </button>
+          {savedFeedback === 'copy' && (
+            <span style={{ color: '#22C55E', fontSize: 12, fontWeight: 500 }}>Saved</span>
+          )}
         </div>
       </div>
 
-      {/* Toast Notification */}
-      {toastProps.visible && <Toast {...toastProps} />}
     </>
   );
 };

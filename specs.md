@@ -31,7 +31,7 @@
 | Color Picker | Implemented | Preset + custom color picker |
 | Undo | Implemented | Ctrl+Z keyboard shortcut |
 | Clear All | Implemented | Removes all annotations |
-| Copy to Clipboard | Implemented | With toast notification |
+| Copy to Clipboard | Implemented | With inline "Saved" feedback |
 | Save/Download | Implemented | PNG format |
 | Keyboard Shortcuts | Implemented | Photoshop-style (V, B, U, E, A, L, T, C, H, R, S, X) |
 | Keyboard Shortcuts Panel | Implemented | Press ? to show all shortcuts |
@@ -339,7 +339,7 @@ GIVEN user has drawn annotations
 WHEN user clicks Done/Save
 THEN annotated image is downloaded to device (PNG format)
 AND annotated image is copied to clipboard
-AND user sees confirmation message "Copied to clipboard"
+AND user sees inline "Saved" text next to the button
 ```
 
 #### FR-12: Cancel

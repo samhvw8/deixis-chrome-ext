@@ -6,7 +6,7 @@
 
 > **Stop describing. Start pointing.**
 
-**Version:** 0.3.2
+**Version:** 0.4.1
 **Tagline:** Annotate images in AI chats. Show what you mean instead of describing it with words.
 
 Ever tried to describe "that small thing in the upper-left corner behind the other thing"? Deixis ends the guessing game. Draw directly on images in AI chat interfaces to show exactly what you mean—circle the object you want removed, arrow to the spot that needs fixing, highlight the area that should change.
@@ -269,14 +269,19 @@ bun run zip
 
 ---
 
-## Recent Changes (v0.3.2)
+## Recent Changes (v0.4.1)
+
+- **Inline "Saved" feedback** - Copy/Download buttons now show "Saved" text inline instead of toast notifications
+- **Cleaner UX** - Removed toast popup in favor of subtle inline confirmation
+
+## Previous Release (v0.4.0)
 
 - **Git-based versioning** - Popup displays version from git tags
 - **Reload Extension + Page** - One-click reload for development workflow
 - **Light/Dark theme toggle** - Popup respects user preference
 - **Updated branding** - New tagline and multi-platform focus
 
-## Previous Release (v0.3.0-beta)
+## Previous Release (v0.3.2)
 
 This release focuses on the extensible architecture and critical rotation/resize fixes:
 
