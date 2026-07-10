@@ -42,6 +42,10 @@ export interface AnnotationToolbarProps {
   opacity: number;
   /** Callback when opacity changes */
   onOpacityChange: (opacity: number) => void;
+  /** Font size for text */
+  fontSize: number;
+  /** Callback when font size changes */
+  onFontSizeChange: (size: number) => void;
   /** Text background color (null means no background) */
   textBgColor: string | null;
   /** Callback when text background color changes */
@@ -54,6 +58,8 @@ export interface AnnotationToolbarProps {
   textOutlineWidth: number;
   /** Callback when text outline width changes */
   onTextOutlineWidthChange: (width: number) => void;
+  /** Type of the currently selected annotation (for showing context-specific controls) */
+  selectedAnnotationType?: AnnotationTool | null;
   /** Fill color for shapes (null means no fill) */
   fillColor: string | null;
   /** Callback when fill color changes */
@@ -125,12 +131,15 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
   onBrushSizeChange,
   opacity,
   onOpacityChange,
+  fontSize,
+  onFontSizeChange,
   textBgColor,
   onTextBgColorChange,
   textOutlineColor,
   onTextOutlineColorChange,
   textOutlineWidth,
   onTextOutlineWidthChange,
+  selectedAnnotationType,
   fillColor,
   onFillColorChange,
   selectedStamp,
@@ -374,8 +383,8 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
           </div>
         )}
 
-        {/* Opacity - shown for all drawing tools */}
-        {['draw', 'rectangle', 'circle', 'arrow', 'text'].includes(selectedTool) && (
+        {/* Opacity - shown for all drawing tools and when editing a text annotation */}
+        {(['draw', 'rectangle', 'circle', 'arrow', 'text'].includes(selectedTool) || (selectedTool === 'move' && selectedAnnotationType === 'text')) && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 8 }}>
             <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>Opacity:</span>
             <input
@@ -441,8 +450,31 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
           </div>
         )}
 
-        {/* Text Background Color Picker - only shown for text tool */}
-        {selectedTool === 'text' && (
+        {/* Font Size - shown for text tool or when editing a text annotation */}
+        {(selectedTool === 'text' || (selectedTool === 'move' && selectedAnnotationType === 'text')) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 8 }}>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>Font:</span>
+            <input
+              type="range"
+              min="10"
+              max="72"
+              value={fontSize}
+              onChange={(e) => onFontSizeChange(Number(e.target.value))}
+              style={{
+                width: 60,
+                height: 16,
+                cursor: 'pointer',
+              }}
+              title={`Font size: ${fontSize}px`}
+            />
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', minWidth: 28 }}>
+              {fontSize}px
+            </span>
+          </div>
+        )}
+
+        {/* Text Background Color Picker - shown for text tool or when editing a text annotation */}
+        {(selectedTool === 'text' || (selectedTool === 'move' && selectedAnnotationType === 'text')) && (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 4 }}>
               <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>BG:</span>

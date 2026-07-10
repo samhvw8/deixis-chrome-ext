@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { AnnotationToolbar, type AnnotationTool } from './AnnotationToolbar';
 import { ANNOTATION_COLORS } from './ColorPicker';
 
+const DEFAULT_FONT_SIZE = 16;
+
 export interface AnnotationOverlayProps {
   imageUrl: string;
   imageBounds?: DOMRect;
@@ -30,6 +32,7 @@ interface Annotation {
   end?: Point;           // For shapes
   text?: string;         // For text labels
   position?: Point;      // For text position
+  fontSize?: number;     // For text font size
   bgColor?: string;      // For text background color
   outlineColor?: string; // For text outline color
   outlineWidth?: number; // For text outline width
@@ -57,7 +60,21 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
   const [textBgColor, setTextBgColor] = useState<string | null>('rgba(0, 0, 0, 0.7)');
   const [textOutlineColor, setTextOutlineColor] = useState<string | null>(null);
   const [textOutlineWidth, setTextOutlineWidth] = useState(2);
+  const [fontSize, setFontSize] = useState(DEFAULT_FONT_SIZE);
   const [selectedStamp, setSelectedStamp] = useState('✓');
+
+  // Saved toolbar defaults — restored when deselecting a text annotation
+  const savedToolbarDefaults = useRef<{
+    color: string;
+    opacity: number;
+    fontSize: number;
+    textBgColor: string | null;
+    textOutlineColor: string | null;
+    textOutlineWidth: number;
+  } | null>(null);
+
+  // Snapshot of annotation at selection start — for undo integration
+  const selectionSnapshot = useRef<Annotation | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [redoStack, setRedoStack] = useState<Annotation[]>([]);
@@ -251,7 +268,8 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
 
       case 'text':
         if (annotation.text && annotation.position) {
-          ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, sans-serif';
+          const textFontSize = annotation.fontSize || DEFAULT_FONT_SIZE;
+          ctx.font = `bold ${textFontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
           const metrics = ctx.measureText(annotation.text);
           const padding = 4;
           // Draw text background if bgColor is set
@@ -259,9 +277,9 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
             ctx.fillStyle = annotation.bgColor;
             ctx.fillRect(
               annotation.position.x - padding,
-              annotation.position.y - 16 - padding,
+              annotation.position.y - textFontSize - padding,
               metrics.width + padding * 2,
-              20 + padding
+              textFontSize + 4 + padding
             );
           }
           // Draw text outline if outlineColor is set
@@ -467,13 +485,14 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       switch (annotation.type) {
         case 'text':
           if (annotation.position && annotation.text) {
-            ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, sans-serif';
+            const textFontSize = annotation.fontSize || DEFAULT_FONT_SIZE;
+            ctx.font = `bold ${textFontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
             const metrics = ctx.measureText(annotation.text);
             const padding = 4;
             if (
               point.x >= annotation.position.x - padding &&
               point.x <= annotation.position.x + metrics.width + padding &&
-              point.y >= annotation.position.y - 16 - padding &&
+              point.y >= annotation.position.y - textFontSize - padding &&
               point.y <= annotation.position.y + padding
             ) {
               return annotation;
@@ -1040,6 +1059,26 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
         setDraggingId(hitAnnotation.id);
         const center = getAnnotationCenter(hitAnnotation);
         setDragOffset({ x: point.x - center.x, y: point.y - center.y });
+        // Save snapshot for undo integration
+        selectionSnapshot.current = { ...hitAnnotation };
+        // Load text annotation properties into toolbar for editing
+        if (hitAnnotation.type === 'text') {
+          // Save current toolbar defaults before overwriting
+          savedToolbarDefaults.current = {
+            color: selectedColor,
+            opacity,
+            fontSize,
+            textBgColor,
+            textOutlineColor,
+            textOutlineWidth,
+          };
+          setFontSize(hitAnnotation.fontSize || DEFAULT_FONT_SIZE);
+          setSelectedColor(hitAnnotation.color);
+          setOpacity(hitAnnotation.opacity);
+          setTextBgColor(hitAnnotation.bgColor || null);
+          setTextOutlineColor(hitAnnotation.outlineColor || null);
+          setTextOutlineWidth(hitAnnotation.outlineWidth || 2);
+        }
       } else {
         setSelectedAnnotationId(null);
       }
@@ -1174,20 +1213,26 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     setIsDrawing(false);
   };
 
+  // Build text-specific properties from current toolbar state (single source of truth)
+  const buildTextProperties = () => ({
+    fontSize,
+    color: selectedColor,
+    opacity,
+    bgColor: textBgColor || undefined,
+    outlineColor: textOutlineColor || undefined,
+    outlineWidth: textOutlineColor ? textOutlineWidth : undefined,
+  });
+
   // Text input handlers
   const submitText = () => {
     if (textInputRef.current?.value) {
       const newAnnotation: Annotation = {
         id: `annotation-${Date.now()}`,
         type: 'text',
-        color: selectedColor,
         strokeWidth: 3,
-        opacity: opacity,
         text: textInputRef.current.value,
         position: textInput.position,
-        bgColor: textBgColor || undefined,
-        outlineColor: textOutlineColor || undefined,
-        outlineWidth: textOutlineColor ? textOutlineWidth : undefined,
+        ...buildTextProperties(),
       };
       setAnnotations([...annotations, newAnnotation]);
       setRedoStack([]); // Clear redo stack on new annotation
@@ -1216,6 +1261,33 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
 
   // Toolbar handlers
   const handleUndo = useCallback(() => {
+    // If there's a pending property-edit snapshot, revert the in-place edit first
+    if (selectionSnapshot.current) {
+      const snapshot = selectionSnapshot.current;
+      let reverted = false;
+      setAnnotations((prev) => {
+        const current = prev.find((a) => a.id === snapshot.id);
+        if (!current) return prev;
+        // Check if the annotation was actually modified
+        const changed =
+          (current.fontSize || DEFAULT_FONT_SIZE) !== (snapshot.fontSize || DEFAULT_FONT_SIZE) ||
+          current.color !== snapshot.color ||
+          current.opacity !== snapshot.opacity ||
+          (current.bgColor || null) !== (snapshot.bgColor || null) ||
+          (current.outlineColor || null) !== (snapshot.outlineColor || null) ||
+          (current.outlineWidth || 2) !== (snapshot.outlineWidth || 2);
+        if (changed) {
+          reverted = true;
+          return prev.map((a) => (a.id === snapshot.id ? snapshot : a));
+        }
+        return prev;
+      });
+      if (reverted) {
+        selectionSnapshot.current = null;
+        setSelectedAnnotationId(null);
+        return; // Property edit reverted — skip normal undo
+      }
+    }
     setAnnotations((prev) => {
       if (prev.length === 0) return prev;
       const removed = prev[prev.length - 1];
@@ -1479,6 +1551,55 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     }
   };
 
+  // Update selected text annotation when toolbar properties change
+  useEffect(() => {
+    if (!selectedAnnotationId || selectedTool !== 'move') return;
+
+    setAnnotations((prev) => {
+      const selected = prev.find((a) => a.id === selectedAnnotationId);
+      if (!selected || selected.type !== 'text') return prev;
+
+      const needsUpdate =
+        (selected.fontSize || DEFAULT_FONT_SIZE) !== fontSize ||
+        selected.color !== selectedColor ||
+        selected.opacity !== opacity ||
+        (selected.bgColor || null) !== textBgColor ||
+        (selected.outlineColor || null) !== textOutlineColor ||
+        (selected.outlineWidth || 2) !== textOutlineWidth;
+
+      if (!needsUpdate) return prev;
+
+      return prev.map((a) =>
+        a.id === selectedAnnotationId
+          ? {
+              ...a,
+              ...buildTextProperties(),
+            }
+          : a
+      );
+    });
+  }, [selectedAnnotationId, selectedTool, fontSize, selectedColor, opacity, textBgColor, textOutlineColor, textOutlineWidth]);
+
+  // Restore toolbar defaults and clear snapshot when deselecting
+  useEffect(() => {
+    if (selectedAnnotationId !== null) return;
+
+    // Clear the snapshot (undo will no longer revert property edits after deselection)
+    selectionSnapshot.current = null;
+
+    // Restore toolbar defaults
+    if (savedToolbarDefaults.current) {
+      const defaults = savedToolbarDefaults.current;
+      setSelectedColor(defaults.color);
+      setOpacity(defaults.opacity);
+      setFontSize(defaults.fontSize);
+      setTextBgColor(defaults.textBgColor);
+      setTextOutlineColor(defaults.textOutlineColor);
+      setTextOutlineWidth(defaults.textOutlineWidth);
+      savedToolbarDefaults.current = null;
+    }
+  }, [selectedAnnotationId]);
+
   // Should show brush preview cursor
   const showBrushPreview = cursorPos && selectedTool === 'draw';
 
@@ -1514,19 +1635,28 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       {/* Toolbar */}
       <AnnotationToolbar
         selectedTool={selectedTool}
-        onToolChange={setSelectedTool}
+        onToolChange={(tool) => {
+          // Clear selection when switching away from move tool to prevent stale sync
+          if (selectedTool === 'move' && tool !== 'move') {
+            setSelectedAnnotationId(null);
+          }
+          setSelectedTool(tool);
+        }}
         selectedColor={selectedColor}
         onColorChange={setSelectedColor}
         brushSize={brushSize}
         onBrushSizeChange={setBrushSize}
         opacity={opacity}
         onOpacityChange={setOpacity}
+        fontSize={fontSize}
+        onFontSizeChange={setFontSize}
         textBgColor={textBgColor}
         onTextBgColorChange={setTextBgColor}
         textOutlineColor={textOutlineColor}
         onTextOutlineColorChange={setTextOutlineColor}
         textOutlineWidth={textOutlineWidth}
         onTextOutlineWidthChange={setTextOutlineWidth}
+        selectedAnnotationType={selectedAnnotation?.type || null}
         fillColor={fillColor}
         onFillColorChange={setFillColor}
         selectedStamp={selectedStamp}
@@ -1591,6 +1721,31 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
             }}
           />
         )}
+
+        {/* Dashed Bounding Box for Selected Text Annotation */}
+        {selectedAnnotation && selectedTool === 'move' && selectedAnnotation.type === 'text' && selectedAnnotation.position && selectedAnnotation.text && canvasRef.current && (() => {
+          const canvas = canvasRef.current!;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return null;
+          const textFontSize = selectedAnnotation.fontSize || DEFAULT_FONT_SIZE;
+          ctx.font = `bold ${textFontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+          const metrics = ctx.measureText(selectedAnnotation.text!);
+          const padding = 6;
+          return (
+            <div
+              style={{
+                position: 'absolute',
+                left: selectedAnnotation.position!.x - padding,
+                top: selectedAnnotation.position!.y - textFontSize - padding,
+                width: metrics.width + padding * 2,
+                height: textFontSize + 4 + padding * 2,
+                border: '1.5px dashed rgba(255, 255, 255, 0.6)',
+                borderRadius: 2,
+                pointerEvents: 'none',
+              }}
+            />
+          );
+        })()}
 
         {/* Resize Handles for Selected Annotation */}
         {resizeHandles.map(({ handle, point }) => (
@@ -1679,13 +1834,13 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
             style={{
               position: 'absolute',
               left: textInput.position.x,
-              top: textInput.position.y - 20,
+              top: textInput.position.y - fontSize - 4,
               background: textBgColor || 'transparent',
               color: selectedColor,
               border: `2px solid ${selectedColor}`,
               borderRadius: 4,
               padding: '4px 8px',
-              fontSize: 14,
+              fontSize: fontSize,
               fontWeight: 'bold',
               outline: 'none',
               minWidth: 100,
