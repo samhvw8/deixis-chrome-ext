@@ -32,6 +32,8 @@
 | Undo | Implemented | Ctrl+Z keyboard shortcut |
 | Clear All | Implemented | Removes all annotations |
 | Copy to Clipboard | Implemented | With inline "Saved" feedback |
+| Auto-attach to Chat | Implemented | Copy also attaches image to Gemini chat input |
+| Edit Text Annotations | Implemented | Select to restyle (font size, colors, opacity); double-click to re-edit content |
 | Save/Download | Implemented | PNG format |
 | Keyboard Shortcuts | Implemented | Photoshop-style (V, B, U, E, A, L, T, C, H, R, S, X) |
 | Keyboard Shortcuts Panel | Implemented | Press ? to show all shortcuts |
@@ -356,7 +358,7 @@ AND nothing is saved or copied
 
 | Excluded Feature | Rationale |
 |------------------|-----------|
-| Auto-attach to Gemini chat input | Technical complexity; defer to Phase 2 |
+| Auto-attach to Gemini chat input | Implemented in v1.4 |
 | Image editing (crop, filter, brightness) | This is an annotation tool, not an editor |
 | Layer management | Phase 2 scope |
 | Scale/resize existing annotations | Implemented in v1.2 |

@@ -115,7 +115,7 @@ function closeAnnotation() {
 }
 
 /**
- * Handle copy action - copy to clipboard only
+ * Handle copy action - copy to clipboard and attach to chat input when supported
  */
 async function handleCopy(dataUrl: string) {
   try {
@@ -125,6 +125,13 @@ async function handleCopy(dataUrl: string) {
       new ClipboardItem({ 'image/png': blob })
     ]);
     console.log('[Deixis] Copied to clipboard');
+
+    // Auto-attach to the site's chat input when the adapter supports it
+    // (clipboard copy above remains the fallback if attaching fails)
+    if (currentAdapter?.attachToChat) {
+      const file = new File([blob], `deixis-annotation-${Date.now()}.png`, { type: 'image/png' });
+      currentAdapter.attachToChat(file);
+    }
   } catch (error) {
     console.error('[Deixis] Failed to copy to clipboard:', error);
   }

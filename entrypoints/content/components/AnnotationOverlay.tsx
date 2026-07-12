@@ -84,6 +84,8 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     visible: false,
     position: { x: 0, y: 0 },
   });
+  // ID of the text annotation being re-edited (double-click), null when creating new text
+  const [editingTextId, setEditingTextId] = useState<string | null>(null);
 
   // Load default brush color from storage and listen for changes
   useEffect(() => {
@@ -196,12 +198,13 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-    // Draw all annotations
+    // Draw all annotations (hide the one being re-edited — the input shows it instead)
     [...annotations, currentAnnotation].forEach((annotation) => {
       if (!annotation) return;
+      if (editingTextId && annotation.id === editingTextId) return;
       drawAnnotation(ctx, annotation);
     });
-  }, [annotations, currentAnnotation]);
+  }, [annotations, currentAnnotation, editingTextId]);
 
   // Draw a single annotation
   const drawAnnotation = (ctx: CanvasRenderingContext2D, annotation: Annotation) => {
@@ -1144,6 +1147,28 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     setCurrentAnnotation(newAnnotation);
   };
 
+  // Double-click a text annotation (move tool) to re-edit its content
+  const handleDoubleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (selectedTool !== 'move') return;
+
+    const point = getCanvasPoint(e);
+    const hitAnnotation = findAnnotationAtPoint(point);
+    if (!hitAnnotation || hitAnnotation.type !== 'text' || !hitAnnotation.position) return;
+
+    // Stop the drag started by the second mousedown
+    setDraggingId(null);
+
+    setEditingTextId(hitAnnotation.id);
+    setTextInput({ visible: true, position: hitAnnotation.position });
+    setTimeout(() => {
+      if (textInputRef.current) {
+        textInputRef.current.value = hitAnnotation.text || '';
+        textInputRef.current.focus();
+        textInputRef.current.select();
+      }
+    }, 0);
+  };
+
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const point = getCanvasPoint(e);
 
@@ -1225,17 +1250,29 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
 
   // Text input handlers
   const submitText = () => {
-    if (textInputRef.current?.value) {
+    const value = textInputRef.current?.value;
+    if (editingTextId) {
+      // Re-editing an existing text annotation: update its text (empty = cancel, keep original)
+      if (value) {
+        setAnnotations((prev) =>
+          prev.map((a) => (a.id === editingTextId ? { ...a, text: value } : a))
+        );
+        setRedoStack([]); // Clear redo stack on edit
+      }
+      setEditingTextId(null);
+    } else if (value) {
       const newAnnotation: Annotation = {
         id: `annotation-${Date.now()}`,
         type: 'text',
         strokeWidth: 3,
-        text: textInputRef.current.value,
+        text: value,
         position: textInput.position,
         ...buildTextProperties(),
       };
       setAnnotations([...annotations, newAnnotation]);
       setRedoStack([]); // Clear redo stack on new annotation
+    }
+    if (textInputRef.current) {
       textInputRef.current.value = '';
     }
     setTextInput({ visible: false, position: { x: 0, y: 0 } });
@@ -1246,7 +1283,8 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       e.preventDefault();
       submitText();
     } else if (e.key === 'Escape') {
-      // Discard - just close without saving
+      // Discard - just close without saving (re-edited annotation keeps its original text)
+      setEditingTextId(null);
       setTextInput({ visible: false, position: { x: 0, y: 0 } });
       if (textInputRef.current) {
         textInputRef.current.value = '';
@@ -1270,6 +1308,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
         if (!current) return prev;
         // Check if the annotation was actually modified
         const changed =
+          current.text !== snapshot.text ||
           (current.fontSize || DEFAULT_FONT_SIZE) !== (snapshot.fontSize || DEFAULT_FONT_SIZE) ||
           current.color !== snapshot.color ||
           current.opacity !== snapshot.opacity ||
@@ -1690,6 +1729,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
         <canvas
           ref={canvasRef}
           onMouseDown={handleMouseDown}
+          onDoubleClick={handleDoubleClick}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={() => {

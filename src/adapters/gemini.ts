@@ -79,4 +79,49 @@ export const geminiAdapter: SiteAdapter = {
 
     return () => observer.disconnect();
   },
+
+  attachToChat(file: File): boolean {
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(file);
+
+    // Strategy 1: Gemini's uploader uses a hidden file input — setting .files and
+    // firing 'change' is shared with the page world, so it survives isolated-world
+    // event restrictions
+    const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]');
+    if (fileInput) {
+      fileInput.files = dataTransfer.files;
+      fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+      console.log('[Deixis] Attached annotated image via Gemini file input');
+      return true;
+    }
+
+    // Strategy 2: synthetic paste on the Quill-based prompt editor; selectors from
+    // most specific to most generic to survive UI changes
+    const selectors = [
+      'rich-textarea .ql-editor',
+      'div.ql-editor[contenteditable="true"]',
+      'div[contenteditable="true"][role="textbox"]',
+    ];
+
+    let input: HTMLElement | null = null;
+    for (const selector of selectors) {
+      input = document.querySelector<HTMLElement>(selector);
+      if (input) break;
+    }
+    if (!input) {
+      console.warn('[Deixis] Gemini chat input not found — falling back to clipboard');
+      return false;
+    }
+
+    input.focus();
+    const pasteEvent = new ClipboardEvent('paste', {
+      bubbles: true,
+      cancelable: true,
+      clipboardData: dataTransfer,
+    });
+    input.dispatchEvent(pasteEvent);
+
+    console.log('[Deixis] Attached annotated image to Gemini chat input via paste');
+    return true;
+  },
 };

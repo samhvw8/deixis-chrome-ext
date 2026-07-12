@@ -66,4 +66,7 @@ export interface SiteAdapter {
 
   /** Site-specific image URL processing (handle CDN, proxies, etc.) */
   processImageUrl?(url: string): string | Promise<string>;
+
+  /** Attach an image file directly to the site's chat input (optional). Returns true on success. */
+  attachToChat?(file: File): boolean;
 }
