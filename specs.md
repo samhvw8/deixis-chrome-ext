@@ -2,8 +2,8 @@
 
 > Chrome Extension for Visual Annotation in Gemini Chat
 
-**Version:** 1.3 (Phase 1 - Quick Wins Update)
-**Last Updated:** January 2026
+**Version:** 1.4 (Text Editing & Auto-Attach Update)
+**Last Updated:** July 2026
 
 ---
 

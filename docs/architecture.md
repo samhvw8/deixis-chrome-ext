@@ -145,6 +145,9 @@ export interface SiteAdapter {
 
   /** Site-specific image URL processing (optional) */
   processImageUrl?(url: string): string | Promise<string>;
+
+  /** Attach an image file directly to the site's chat input (optional) */
+  attachToChat?(file: File): boolean;
 }
 ```
 

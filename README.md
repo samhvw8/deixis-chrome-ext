@@ -6,7 +6,7 @@
 
 > **Stop describing. Start pointing.**
 
-**Version:** 0.4.1
+**Version:** 0.5.0
 **Tagline:** Annotate images in AI chats. Show what you mean instead of describing it with words.
 
 Ever tried to describe "that small thing in the upper-left corner behind the other thing"? Deixis ends the guessing game. Draw directly on images in AI chat interfaces to show exactly what you mean—circle the object you want removed, arrow to the spot that needs fixing, highlight the area that should change.
@@ -30,11 +30,13 @@ Deixis (Greek: "to show, to point out") is a Chrome extension that enables preci
 - **Advanced Editing**
   - Selection and transformation of annotations
   - Rotation-aware resize handles with correct anchor locking
+  - Edit text annotations after creation (restyle via toolbar, double-click to change content)
   - Undo/redo support
   - Clear all annotations
 
 - **Export Options**
   - Copy annotated image to clipboard
+  - Auto-attach annotated image directly to the chat input (Gemini)
   - Download as PNG with annotations embedded
   - Preserves original image quality
 
@@ -269,7 +271,15 @@ bun run zip
 
 ---
 
-## Recent Changes (v0.4.1)
+## Recent Changes (v0.5.0)
+
+- **Auto-attach to chat** - Copy now also inserts the annotated image directly into Gemini's chat input, closing the annotate → paste loop
+- **Text annotation editing** - Select a text annotation (move tool) to change its font size, color, background, outline, and opacity; double-click to re-edit its content
+- **Text selection feedback** - Dashed bounding box shows which text annotation is selected
+- **Undo for edits** - Ctrl+Z reverts property/content edits to selected annotations instead of deleting them
+- **Adapter API** - New optional `attachToChat()` method on `SiteAdapter` for site-specific chat input integration
+
+## Previous Release (v0.4.1)
 
 - **Inline "Saved" feedback** - Copy/Download buttons now show "Saved" text inline instead of toast notifications
 - **Cleaner UX** - Removed toast popup in favor of subtle inline confirmation

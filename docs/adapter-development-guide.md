@@ -495,6 +495,40 @@ async processImageUrl(url: string): Promise<string> {
 }
 ```
 
+#### 3.7 Implement `attachToChat()` (Optional)
+
+Attach the annotated image directly to the site's chat input after Copy, so users skip the manual paste step. Return `true` on success; on `false` the clipboard copy remains as the fallback.
+
+Two common strategies (see `src/adapters/gemini.ts` for the reference implementation):
+
+```typescript
+attachToChat(file: File): boolean {
+  const dataTransfer = new DataTransfer();
+  dataTransfer.items.add(file);
+
+  // Strategy 1: hidden file input — setting .files and firing 'change' is shared
+  // with the page world, so it survives isolated-world event restrictions
+  const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]');
+  if (fileInput) {
+    fileInput.files = dataTransfer.files;
+    fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  }
+
+  // Strategy 2: synthetic paste on the chat editor (contenteditable)
+  const editor = document.querySelector<HTMLElement>('div[contenteditable="true"][role="textbox"]');
+  if (!editor) return false;
+
+  editor.focus();
+  editor.dispatchEvent(new ClipboardEvent('paste', {
+    bubbles: true,
+    cancelable: true,
+    clipboardData: dataTransfer,
+  }));
+  return true;
+}
+```
+
 ---
 
 ### Step 4: Register Adapter

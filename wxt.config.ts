@@ -34,7 +34,7 @@ export default defineConfig({
   manifest: {
     name: 'Deixis - Visual Annotation for AI',
     description: 'Annotate images in AI chats. Show what you mean instead of describing it with words.',
-    version: '0.3.2',
+    version: '0.5.0',
     permissions: ['activeTab', 'contextMenus', 'clipboardWrite', 'tabs', 'storage'],
     host_permissions: [
       '<all_urls>',
