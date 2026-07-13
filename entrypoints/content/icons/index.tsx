@@ -535,6 +535,26 @@ export const KeyboardIcon: React.FC<IconProps> = ({ size = 20, className = '' })
   </svg>
 );
 
+/**
+ * Sparkle/magic-wand icon for AI prompt generation
+ */
+export const SparkleIcon: React.FC<IconProps> = ({ size = 20, className = '' }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 20 20"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <path d="M10 2L11.5 6.5L16 8L11.5 9.5L10 14L8.5 9.5L4 8L8.5 6.5L10 2Z" />
+    <path d="M15.5 13L16.2 15.3L18.5 16L16.2 16.7L15.5 19L14.8 16.7L12.5 16L14.8 15.3L15.5 13Z" />
+  </svg>
+);
+
 export default {
   MoveIcon,
   PencilIcon,
@@ -561,4 +581,5 @@ export default {
   LineIcon,
   StampIcon,
   KeyboardIcon,
+  SparkleIcon,
 };

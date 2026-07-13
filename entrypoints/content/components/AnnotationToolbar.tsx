@@ -21,6 +21,7 @@ import {
   LineIcon,
   StampIcon,
   KeyboardIcon,
+  SparkleIcon,
 } from '../icons';
 
 export type AnnotationTool = 'move' | 'draw' | 'rectangle' | 'circle' | 'arrow' | 'line' | 'text' | 'eraser' | 'callout' | 'blur' | 'highlight' | 'stamp';
@@ -82,6 +83,10 @@ export interface AnnotationToolbarProps {
   onClearAll: () => void;
   /** Callback for copy to clipboard action */
   onCopy: () => void;
+  /** Callback to generate a text prompt from the annotations */
+  onGeneratePrompt?: () => void;
+  /** Whether prompt generation is available (there is at least one annotation) */
+  canGeneratePrompt?: boolean;
   /** Callback for save/download action */
   onSave: () => void;
   /** Callback for cancel action */
@@ -151,6 +156,8 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
   canClear,
   onClearAll,
   onCopy,
+  onGeneratePrompt,
+  canGeneratePrompt = false,
   onSave,
   onCancel,
   onDuplicate,
@@ -645,6 +652,12 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
 
         {/* Action Buttons */}
         <div style={{ ...flexCenter, gap: 8 }} role="group" aria-label="Actions">
+          <ToolButton
+            icon={<SparkleIcon />}
+            tooltip="Generate prompt"
+            onClick={onGeneratePrompt ?? (() => {})}
+            disabled={!canGeneratePrompt}
+          />
           <ToolButton
             icon={<DownloadIcon />}
             tooltip="Save"

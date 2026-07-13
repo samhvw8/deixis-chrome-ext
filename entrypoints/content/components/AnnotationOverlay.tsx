@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { AnnotationToolbar, type AnnotationTool } from './AnnotationToolbar';
 import { ANNOTATION_COLORS } from './ColorPicker';
+import { generatePrompt } from '../utils/generatePrompt';
 
 const DEFAULT_FONT_SIZE = 16;
 
@@ -76,6 +77,12 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
   // Snapshot of annotation at selection start — for undo integration
   const selectionSnapshot = useRef<Annotation | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  // Prompt-generation panel state
+  const [promptPanel, setPromptPanel] = useState<{ visible: boolean; text: string }>({
+    visible: false,
+    text: '',
+  });
+  const [promptCopied, setPromptCopied] = useState(false);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [redoStack, setRedoStack] = useState<Annotation[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -1374,6 +1381,28 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     });
   }, []);
 
+  // Generate an editable text prompt describing the annotations
+  const handleGeneratePrompt = useCallback(() => {
+    const canvas = canvasRef.current;
+    const text = generatePrompt(
+      annotations,
+      canvas?.width ?? 0,
+      canvas?.height ?? 0
+    );
+    setPromptCopied(false);
+    setPromptPanel({ visible: true, text });
+  }, [annotations]);
+
+  const handleCopyPrompt = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(promptPanel.text);
+      setPromptCopied(true);
+      setTimeout(() => setPromptCopied(false), 1500);
+    } catch (error) {
+      console.error('[Deixis] Failed to copy prompt:', error);
+    }
+  }, [promptPanel.text]);
+
   // Handle duplicate selected annotation (Ctrl+D)
   const handleDuplicate = useCallback(() => {
     if (!selectedAnnotationId) return;
@@ -1737,6 +1766,8 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
         canClear={annotations.length > 0}
         onClearAll={handleClearAll}
         onCopy={handleCopy}
+        onGeneratePrompt={handleGeneratePrompt}
+        canGeneratePrompt={annotations.length > 0}
         onSave={handleSave}
         onCancel={onClose}
         onDuplicate={handleDuplicate}
@@ -2030,6 +2061,106 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
                 <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>{action}</span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Generated Prompt Panel */}
+      {promptPanel.visible && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            background: 'rgba(0, 0, 0, 0.95)',
+            borderRadius: 12,
+            padding: 24,
+            border: '1px solid rgba(255,255,255,0.2)',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+            zIndex: 2147483647,
+            fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+            width: 520,
+            maxWidth: '90vw',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <h2 style={{ color: '#fff', margin: 0, fontSize: 16, fontWeight: 600 }}>Generated Prompt</h2>
+            <button
+              onClick={() => setPromptPanel({ visible: false, text: '' })}
+              aria-label="Close prompt panel"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'rgba(255,255,255,0.6)',
+                cursor: 'pointer',
+                fontSize: 20,
+                padding: 4,
+                lineHeight: 1,
+              }}
+            >
+              ×
+            </button>
+          </div>
+          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, margin: '0 0 8px' }}>
+            Edit if needed, then copy and paste it into the chat alongside your annotated image.
+          </p>
+          <textarea
+            value={promptPanel.text}
+            onChange={(e) => setPromptPanel((prev) => ({ ...prev, text: e.target.value }))}
+            spellCheck={false}
+            style={{
+              width: '100%',
+              minHeight: 180,
+              resize: 'vertical',
+              background: 'rgba(255,255,255,0.06)',
+              color: '#fff',
+              border: '1px solid rgba(255,255,255,0.2)',
+              borderRadius: 8,
+              padding: 12,
+              fontSize: 13,
+              lineHeight: 1.5,
+              fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+              outline: 'none',
+              boxSizing: 'border-box',
+            }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginTop: 12 }}>
+            {promptCopied && (
+              <span style={{ color: '#22C55E', fontSize: 12, fontWeight: 500 }}>Copied</span>
+            )}
+            <button
+              type="button"
+              onClick={handleGeneratePrompt}
+              style={{
+                background: 'transparent',
+                border: '1px solid rgba(255,255,255,0.25)',
+                color: 'rgba(255,255,255,0.85)',
+                borderRadius: 8,
+                padding: '8px 14px',
+                fontSize: 13,
+                cursor: 'pointer',
+              }}
+            >
+              Regenerate
+            </button>
+            <button
+              type="button"
+              onClick={handleCopyPrompt}
+              style={{
+                background: '#22C55E',
+                border: 'none',
+                color: '#04120a',
+                borderRadius: 8,
+                padding: '8px 16px',
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Copy prompt
+            </button>
           </div>
         </div>
       )}

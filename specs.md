@@ -32,6 +32,7 @@
 | Undo | Implemented | Ctrl+Z keyboard shortcut |
 | Clear All | Implemented | Removes all annotations |
 | Copy to Clipboard | Implemented | With inline "Saved" feedback |
+| Generate Prompt | Implemented | Builds an editable text prompt from annotations (tool, color, position, label) |
 | Auto-attach to Chat | Implemented | Copy also attaches image to Gemini chat input |
 | Edit Text Annotations | Implemented | Select to restyle (font size, colors, opacity); double-click to re-edit content |
 | Save/Download | Implemented | PNG format |
