@@ -160,7 +160,7 @@ function injectButtons() {
 
   const images = currentAdapter.findImages();
 
-  images.forEach(({ element, url, container }) => {
+  images.forEach(({ element, container }) => {
     // Skip if already injected
     if (container?.querySelector(`.${DEIXIS_BUTTON_CLASS}`)) return;
 
@@ -168,7 +168,10 @@ function injectButtons() {
     if (!config) return;
 
     const button = createDeixisButton({
-      onClick: () => openAnnotation(url, element.getBoundingClientRect()),
+      // Read element.src live at click time, not a captured value — the button
+      // is created once but the image's src can still be updated by the site
+      // (e.g. set asynchronously after injection) before the user clicks
+      onClick: () => openAnnotation(element.src, element.getBoundingClientRect()),
       style: config.style,
       showOnHover: config.showOnHover,
       hoverTarget: config.hoverTarget || config.container,

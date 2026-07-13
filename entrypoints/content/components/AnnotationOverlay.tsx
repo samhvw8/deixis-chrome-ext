@@ -151,8 +151,38 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       resizeCanvas();
       redrawCanvas();
     };
-    img.onerror = (e) => {
-      console.error('[Deixis] Image load error:', e);
+    img.onerror = () => {
+      // blob: URLs (e.g. Gemini's generated images) can be revoked for new fetches
+      // while the page's own <img> element keeps its already-decoded bitmap —
+      // snapshot that live element instead of re-fetching the URL.
+      const liveImg = Array.from(document.images).find(
+        (candidate) => candidate.src === imageUrl && candidate.complete && candidate.naturalWidth > 0
+      );
+      if (!liveImg) {
+        console.error('[Deixis] Image load error and no live element to snapshot:', imageUrl);
+        return;
+      }
+      const snapshotCanvas = document.createElement('canvas');
+      snapshotCanvas.width = liveImg.naturalWidth;
+      snapshotCanvas.height = liveImg.naturalHeight;
+      const snapshotCtx = snapshotCanvas.getContext('2d');
+      if (!snapshotCtx) return;
+      try {
+        snapshotCtx.drawImage(liveImg, 0, 0);
+        const dataUrl = snapshotCanvas.toDataURL('image/png');
+        const fallbackImg = new Image();
+        fallbackImg.onload = () => {
+          imageRef.current = fallbackImg;
+          resizeCanvas();
+          redrawCanvas();
+        };
+        fallbackImg.onerror = () => {
+          console.error('[Deixis] Fallback snapshot image also failed to load');
+        };
+        fallbackImg.src = dataUrl;
+      } catch (err) {
+        console.error('[Deixis] Failed to snapshot live image element:', err);
+      }
     };
     img.src = imageUrl;
   }, [imageUrl]);
