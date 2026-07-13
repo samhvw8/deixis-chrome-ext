@@ -3,6 +3,18 @@
 All notable changes to Deixis are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.6.0] - 2026-07-13
+
+### Added
+- Generate an editable text prompt from the annotations (tool, color, position region, and label) via a "Generate prompt" toolbar action
+- Copy now inserts the generated prompt into Gemini's chat input alongside the attached image
+- Callout numbers attach to nearby shapes in the prompt so they read as references (e.g. "1. a red box around the center-left")
+- Double-click a text annotation to re-edit its content in place
+
+### Fixed
+- Load the annotation image reliably on Gemini: read the image src live at click time and snapshot the page's decoded `<img>` when a direct load fails (revoked blob: URLs)
+- Insert prompt text via `execCommand('insertText')` — Gemini's editor ignores synthetic paste events
+
 ## [0.5.0] - 2026-07-12
 
 ### Added

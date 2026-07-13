@@ -6,7 +6,7 @@
 
 > **Stop describing. Start pointing.**
 
-**Version:** 0.5.0
+**Version:** 0.6.0
 **Tagline:** Annotate images in AI chats. Show what you mean instead of describing it with words.
 
 Ever tried to describe "that small thing in the upper-left corner behind the other thing"? Deixis ends the guessing game. Draw directly on images in AI chat interfaces to show exactly what you mean—circle the object you want removed, arrow to the spot that needs fixing, highlight the area that should change.
@@ -271,7 +271,14 @@ bun run zip
 
 ---
 
-## Recent Changes (v0.5.0)
+## Recent Changes (v0.6.0)
+
+- **Generate prompt** - Turn your annotations into an editable text prompt (tool, color, position, label) and send it to the chat input along with the image on Copy
+- **Callout references** - Numbered callouts attach to nearby shapes so the prompt reads as "1. a red box around the center-left"
+- **Edit text content** - Double-click a text annotation to re-edit its wording in place
+- **Reliable image loading on Gemini** - Fixed blank canvas caused by async/blob image URLs
+
+## Previous Release (v0.5.0)
 
 - **Auto-attach to chat** - Copy now also inserts the annotated image directly into Gemini's chat input, closing the annotate → paste loop
 - **Text annotation editing** - Select a text annotation (move tool) to change its font size, color, background, outline, and opacity; double-click to re-edit its content
