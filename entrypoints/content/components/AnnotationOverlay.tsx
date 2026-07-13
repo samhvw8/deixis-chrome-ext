@@ -9,7 +9,7 @@ export interface AnnotationOverlayProps {
   imageUrl: string;
   imageBounds?: DOMRect;
   onClose: () => void;
-  onCopy: (dataUrl: string) => void;
+  onCopy: (dataUrl: string, promptText?: string) => void;
   onSave: (dataUrl: string) => void;
 }
 
@@ -1483,9 +1483,15 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
   const handleCopy = useCallback(async () => {
     const dataUrl = await getAnnotatedImage();
     if (dataUrl) {
-      onCopy(dataUrl);
+      // Send the prompt along with the image: while the panel is open, respect
+      // the user's edited text; otherwise generate fresh from current annotations.
+      const canvas = canvasRef.current;
+      const promptText = promptPanel.visible
+        ? promptPanel.text
+        : generatePrompt(annotations, canvas?.width ?? 0, canvas?.height ?? 0);
+      onCopy(dataUrl, promptText || undefined);
     }
-  }, [getAnnotatedImage, onCopy]);
+  }, [getAnnotatedImage, onCopy, promptPanel.visible, promptPanel.text, annotations]);
 
   const handleSave = useCallback(async () => {
     const dataUrl = await getAnnotatedImage();

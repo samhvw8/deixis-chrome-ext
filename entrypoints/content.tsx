@@ -117,7 +117,7 @@ function closeAnnotation() {
 /**
  * Handle copy action - copy to clipboard and attach to chat input when supported
  */
-async function handleCopy(dataUrl: string) {
+async function handleCopy(dataUrl: string, promptText?: string) {
   try {
     const response = await fetch(dataUrl);
     const blob = await response.blob();
@@ -126,11 +126,12 @@ async function handleCopy(dataUrl: string) {
     ]);
     console.log('[Deixis] Copied to clipboard');
 
-    // Auto-attach to the site's chat input when the adapter supports it
+    // Auto-attach to the site's chat input when the adapter supports it,
+    // inserting the generated prompt text alongside the image.
     // (clipboard copy above remains the fallback if attaching fails)
     if (currentAdapter?.attachToChat) {
       const file = new File([blob], `deixis-annotation-${Date.now()}.png`, { type: 'image/png' });
-      currentAdapter.attachToChat(file);
+      currentAdapter.attachToChat(file, promptText);
     }
   } catch (error) {
     console.error('[Deixis] Failed to copy to clipboard:', error);
