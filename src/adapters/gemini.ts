@@ -85,33 +85,42 @@ export const geminiAdapter: SiteAdapter = {
     imageTransfer.items.add(file);
 
     // Locate the Quill-based prompt editor; selectors ordered most-specific to
-    // most-generic to survive UI changes.
-    const editorSelectors = [
-      'rich-textarea .ql-editor',
-      'div.ql-editor[contenteditable="true"]',
-      'div[contenteditable="true"][role="textbox"]',
-    ];
-    let editor: HTMLElement | null = null;
-    for (const selector of editorSelectors) {
-      editor = document.querySelector<HTMLElement>(selector);
-      if (editor) break;
-    }
+    // most-generic to survive UI changes. Re-queried at call time because the
+    // input area re-renders when an image is added.
+    const findEditor = (): HTMLElement | null => {
+      const selectors = [
+        'rich-textarea .ql-editor',
+        'div.ql-editor[contenteditable="true"]',
+        'div[contenteditable="true"][role="textbox"]',
+      ];
+      for (const selector of selectors) {
+        const el = document.querySelector<HTMLElement>(selector);
+        if (el) return el;
+      }
+      return null;
+    };
 
-    // Insert the generated prompt text into the editor via a text/plain paste
-    // (Quill handles pasted text reliably, incl. newlines).
+    // Insert the generated prompt text into the editor. Gemini's Quill editor
+    // ignores synthetic paste events (isTrusted=false) but responds to
+    // execCommand('insertText'), which fires the real input event Quill listens
+    // for. Deferred so it runs after the image upload re-renders the input.
     const insertPrompt = () => {
-      if (!promptText || !editor) return;
-      const textTransfer = new DataTransfer();
-      textTransfer.setData('text/plain', promptText);
-      editor.focus();
-      editor.dispatchEvent(
-        new ClipboardEvent('paste', {
-          bubbles: true,
-          cancelable: true,
-          clipboardData: textTransfer,
-        })
-      );
-      console.log('[Deixis] Inserted generated prompt into Gemini chat input');
+      if (!promptText) return;
+      setTimeout(() => {
+        const editor = findEditor();
+        if (!editor) return;
+        editor.focus();
+        const selection = window.getSelection();
+        if (selection) {
+          const range = document.createRange();
+          range.selectNodeContents(editor);
+          range.collapse(false); // caret at end
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+        document.execCommand('insertText', false, promptText);
+        console.log('[Deixis] Inserted generated prompt into Gemini chat input');
+      }, 120);
     };
 
     // Strategy 1: Gemini's uploader uses a hidden file input — setting .files and
@@ -127,6 +136,7 @@ export const geminiAdapter: SiteAdapter = {
     }
 
     // Strategy 2: synthetic paste of the image on the prompt editor.
+    const editor = findEditor();
     if (!editor) {
       console.warn('[Deixis] Gemini chat input not found — falling back to clipboard');
       return false;
