@@ -11,6 +11,9 @@
     "build:firefox": "wxt build -b firefox",
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
+    "submit": "wxt submit --chrome-zip .output/*-chrome.zip",
+    "submit:dry": "wxt submit --dry-run --chrome-zip .output/*-chrome.zip",
+    "release": "wxt zip && wxt submit --chrome-zip .output/*-chrome.zip",
     "compile": "tsc --noEmit",
     "postinstall": "wxt prepare"
   },

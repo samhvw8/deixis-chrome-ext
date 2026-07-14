@@ -37,7 +37,7 @@ export default defineConfig({
     version: '0.6.0',
     permissions: ['activeTab', 'contextMenus', 'clipboardWrite', 'tabs', 'storage'],
     host_permissions: [
-      '<all_urls>',
+      'https://gemini.google.com/*',
     ],
   },
 });
