@@ -1,28 +1,49 @@
 name: Release
 
+# Auto-publish to the Chrome Web Store when a version tag is pushed:
+#   npm version patch   # or edit versions + `git tag vX.Y.Z`
+#   git push --follow-tags
 on:
-  workflow_dispatch:
+  push:
+    tags:
+      - 'v*.*.*'
 
 jobs:
   submit:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub Release
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
+      - uses: oven-sh/setup-bun@v2
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
-      - name: Zip extension
-        run: npm run zip
+      - name: Build & zip
+        run: bun run zip
+
+      - name: Verify tag matches manifest version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VER=$(jq -r .version .output/chrome-mv3/manifest.json)
+          if [ "$TAG" != "$VER" ]; then
+            echo "::error::Tag v$TAG does not match built manifest version $VER (bump wxt.config.ts + package.json)"
+            exit 1
+          fi
+          echo "Publishing version $VER"
 
       - name: Submit to Chrome Web Store
-        run: npm run submit
+        run: bun run submit
         env:
           CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
           CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
           CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
           CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: .output/*-chrome.zip
+          generate_release_notes: true
