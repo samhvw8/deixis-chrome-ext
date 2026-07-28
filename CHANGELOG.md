@@ -3,7 +3,7 @@
 All notable changes to Deixis are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.8.0] - 2026-07-28
 
 ### Fixed
 - Rotated annotations could not be clicked where they were drawn — hit testing compared the click against unrotated bounds, so a turned shape kept an invisible axis-aligned hit box while its visible border did nothing
