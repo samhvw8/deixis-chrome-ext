@@ -1,13 +1,35 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { browser } from 'wxt/browser';
-import { AnnotationToolbar, type AnnotationTool } from './AnnotationToolbar';
+import { AnnotationToolbar } from './AnnotationToolbar';
 import { DEFAULT_BRUSH_COLOR } from '@/src/core/colors';
 import { createLogger } from '@/src/core/logger';
+import {
+  DEFAULT_FONT_SIZE,
+  type Annotation,
+  type AnnotationTool,
+  type Point,
+  type ResizeHandle,
+  type TextMeasurer,
+} from '@/src/core/annotation/types';
+import {
+  constrainPoint,
+  findAnnotationAtPoint,
+  findResizeHandleAtPoint,
+  getAnchorHandle,
+  getAnnotationCenter,
+  getCursorForHandle,
+  getLocalCorner,
+  getResizeHandles,
+  getRotationHandlePosition,
+  isPointOnRotationHandle,
+  moveAnnotation,
+  resizeAnnotation,
+  rotatePoint,
+  scaleAnnotations,
+} from '@/src/core/annotation/geometry';
 import { generatePrompt } from '../utils/generatePrompt';
 
 const logger = createLogger();
-
-const DEFAULT_FONT_SIZE = 16;
 
 /**
  * Upper bound for the canvas backing store. The canvas renders at the source
@@ -34,39 +56,9 @@ const EXPORT_UNAVAILABLE =
 
 export interface AnnotationOverlayProps {
   imageUrl: string;
-  imageBounds?: DOMRect;
   onClose: () => void;
   onCopy: (dataUrl: string, promptText?: string) => void;
   onSave: (dataUrl: string) => void;
-}
-
-interface Point {
-  x: number;
-  y: number;
-}
-
-// Resize handle positions
-type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
-
-interface Annotation {
-  id: string;
-  type: AnnotationTool;
-  color: string;
-  strokeWidth: number;
-  opacity: number;          // Opacity 0-1
-  fillColor?: string;       // Fill color for shapes (null = no fill)
-  points?: Point[];      // For freehand draw
-  start?: Point;         // For shapes
-  end?: Point;           // For shapes
-  text?: string;         // For text labels
-  position?: Point;      // For text position
-  fontSize?: number;     // For text font size
-  bgColor?: string;      // For text background color
-  outlineColor?: string; // For text outline color
-  outlineWidth?: number; // For text outline width
-  calloutNumber?: number; // For callout annotations
-  rotation?: number;     // Rotation angle in radians
-  stamp?: string;        // For stamp annotations (emoji)
 }
 
 /** Append a snapshot to an undo stack, dropping the oldest past MAX_HISTORY. */
@@ -85,29 +77,10 @@ const sameAnnotations = (a: Annotation[], b: Annotation[]): boolean =>
   a === b || (a.length === b.length && a.every((item, i) => item === b[i]));
 
 /**
- * Rescale every stored coordinate by `ratio`. Annotation positions are in the
- * canvas's CSS-pixel space, which is derived from the viewport, so a window
- * resize changes that space out from under them. Sizes (stroke width, font
- * size) stay fixed so annotations remain legible at any display scale.
- */
-const scaleAnnotations = (list: Annotation[], ratio: number): Annotation[] => {
-  if (!Number.isFinite(ratio) || ratio <= 0 || ratio === 1) return list;
-  const scalePoint = (p: Point): Point => ({ x: p.x * ratio, y: p.y * ratio });
-  return list.map((annotation) => ({
-    ...annotation,
-    points: annotation.points?.map(scalePoint),
-    start: annotation.start ? scalePoint(annotation.start) : undefined,
-    end: annotation.end ? scalePoint(annotation.end) : undefined,
-    position: annotation.position ? scalePoint(annotation.position) : undefined,
-  }));
-};
-
-/**
  * AnnotationOverlay - Full-screen overlay for image annotation
  */
 export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
   imageUrl,
-  imageBounds,
   onClose,
   onCopy,
   onSave,
@@ -463,7 +436,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       if (editingTextId && annotation.id === editingTextId) return;
       drawAnnotation(ctx, annotation);
     });
-  }, [annotations, currentAnnotation, editingTextId, imageGeneration]);
+  }, [annotations, currentAnnotation, editingTextId]);
 
   /**
    * Read canvas pixels for the blur tool. Returns null instead of throwing when
@@ -758,548 +731,24 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     };
   };
 
-  // Constrain point for Shift+drag (perfect squares/circles, 45° angles)
-  const constrainPoint = (start: Point, end: Point, type: AnnotationTool): Point => {
-    const dx = end.x - start.x;
-    const dy = end.y - start.y;
+  /**
+   * Canvas-backed text measurement for hit testing. The geometry module is pure,
+   * so it takes this as a port rather than reaching for a rendering context.
+   * Must match the font used by drawAnnotation's 'text' case exactly, or the
+   * clickable box drifts from the drawn glyphs.
+   */
+  const measureText = useCallback<TextMeasurer>((text, size) => {
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return 0;
+    ctx.font = `bold ${size}px -apple-system, BlinkMacSystemFont, sans-serif`;
+    return ctx.measureText(text).width;
+  }, []);
 
-    if (type === 'rectangle' || type === 'circle') {
-      // Constrain to perfect square/circle
-      const size = Math.max(Math.abs(dx), Math.abs(dy));
-      return {
-        x: start.x + size * Math.sign(dx || 1),
-        y: start.y + size * Math.sign(dy || 1),
-      };
-    } else if (type === 'arrow') {
-      // Snap to 45° angles (0, 45, 90, 135, 180, etc.)
-      const angle = Math.atan2(dy, dx);
-      const snapAngle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
-      const length = Math.sqrt(dx * dx + dy * dy);
-      return {
-        x: start.x + length * Math.cos(snapAngle),
-        y: start.y + length * Math.sin(snapAngle),
-      };
-    }
-    return end;
-  };
-
-  // Hit detection - find annotation at point
-  const findAnnotationAtPoint = (point: Point): Annotation | null => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (!ctx) return null;
-
-    // Check annotations in reverse order (top-most first)
-    for (let i = annotations.length - 1; i >= 0; i--) {
-      const annotation = annotations[i];
-      const hitPadding = 10; // Tolerance for clicking
-
-      switch (annotation.type) {
-        case 'text':
-          if (annotation.position && annotation.text) {
-            const textFontSize = annotation.fontSize || DEFAULT_FONT_SIZE;
-            ctx.font = `bold ${textFontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
-            const metrics = ctx.measureText(annotation.text);
-            const padding = 4;
-            if (
-              point.x >= annotation.position.x - padding &&
-              point.x <= annotation.position.x + metrics.width + padding &&
-              point.y >= annotation.position.y - textFontSize - padding &&
-              point.y <= annotation.position.y + padding
-            ) {
-              return annotation;
-            }
-          }
-          break;
-
-        case 'rectangle':
-          if (annotation.start && annotation.end) {
-            const minX = Math.min(annotation.start.x, annotation.end.x);
-            const maxX = Math.max(annotation.start.x, annotation.end.x);
-            const minY = Math.min(annotation.start.y, annotation.end.y);
-            const maxY = Math.max(annotation.start.y, annotation.end.y);
-            // Check if near the border
-            const nearLeft = Math.abs(point.x - minX) < hitPadding && point.y >= minY && point.y <= maxY;
-            const nearRight = Math.abs(point.x - maxX) < hitPadding && point.y >= minY && point.y <= maxY;
-            const nearTop = Math.abs(point.y - minY) < hitPadding && point.x >= minX && point.x <= maxX;
-            const nearBottom = Math.abs(point.y - maxY) < hitPadding && point.x >= minX && point.x <= maxX;
-            if (nearLeft || nearRight || nearTop || nearBottom) {
-              return annotation;
-            }
-          }
-          break;
-
-        case 'circle':
-          if (annotation.start && annotation.end) {
-            const centerX = (annotation.start.x + annotation.end.x) / 2;
-            const centerY = (annotation.start.y + annotation.end.y) / 2;
-            const radiusX = Math.abs(annotation.end.x - annotation.start.x) / 2;
-            const radiusY = Math.abs(annotation.end.y - annotation.start.y) / 2;
-            // Ellipse equation
-            const dx = point.x - centerX;
-            const dy = point.y - centerY;
-            const normalizedDist = (dx * dx) / (radiusX * radiusX) + (dy * dy) / (radiusY * radiusY);
-            if (Math.abs(normalizedDist - 1) < 0.3) {
-              return annotation;
-            }
-          }
-          break;
-
-        case 'arrow':
-          if (annotation.start && annotation.end) {
-            // Check distance to line segment
-            const dist = distanceToLineSegment(point, annotation.start, annotation.end);
-            if (dist < hitPadding) {
-              return annotation;
-            }
-          }
-          break;
-
-        case 'draw':
-          if (annotation.points && annotation.points.length > 0) {
-            // Check if near any point in the path
-            for (const p of annotation.points) {
-              const dx = point.x - p.x;
-              const dy = point.y - p.y;
-              if (Math.sqrt(dx * dx + dy * dy) < hitPadding) {
-                return annotation;
-              }
-            }
-          }
-          break;
-
-        case 'callout':
-          if (annotation.position) {
-            const calloutRadius = 14;
-            const dx = point.x - annotation.position.x;
-            const dy = point.y - annotation.position.y;
-            if (Math.sqrt(dx * dx + dy * dy) <= calloutRadius + hitPadding) {
-              return annotation;
-            }
-          }
-          break;
-
-        case 'line':
-          if (annotation.start && annotation.end) {
-            const dist = distanceToLineSegment(point, annotation.start, annotation.end);
-            if (dist < hitPadding) {
-              return annotation;
-            }
-          }
-          break;
-
-        case 'highlight':
-        case 'blur':
-          if (annotation.start && annotation.end) {
-            const minX = Math.min(annotation.start.x, annotation.end.x);
-            const maxX = Math.max(annotation.start.x, annotation.end.x);
-            const minY = Math.min(annotation.start.y, annotation.end.y);
-            const maxY = Math.max(annotation.start.y, annotation.end.y);
-            if (point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY) {
-              return annotation;
-            }
-          }
-          break;
-
-        case 'stamp':
-          if (annotation.position) {
-            const stampRadius = 18; // Approximate hit area for emoji
-            const dx = point.x - annotation.position.x;
-            const dy = point.y - annotation.position.y;
-            if (Math.sqrt(dx * dx + dy * dy) <= stampRadius + hitPadding) {
-              return annotation;
-            }
-          }
-          break;
-      }
-    }
-    return null;
-  };
-
-  // Distance from point to line segment
-  const distanceToLineSegment = (p: Point, a: Point, b: Point): number => {
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const lengthSq = dx * dx + dy * dy;
-    if (lengthSq === 0) return Math.sqrt((p.x - a.x) ** 2 + (p.y - a.y) ** 2);
-
-    let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / lengthSq;
-    t = Math.max(0, Math.min(1, t));
-
-    const projX = a.x + t * dx;
-    const projY = a.y + t * dy;
-    return Math.sqrt((p.x - projX) ** 2 + (p.y - projY) ** 2);
-  };
-
-  // Get resize handles for an annotation (only for resizable types)
-  const getResizeHandles = (annotation: Annotation): { handle: ResizeHandle; point: Point }[] => {
-    if (!['rectangle', 'circle', 'arrow', 'line', 'highlight', 'blur'].includes(annotation.type)) {
-      return [];
-    }
-
-    if (!annotation.start || !annotation.end) return [];
-
-    const minX = Math.min(annotation.start.x, annotation.end.x);
-    const maxX = Math.max(annotation.start.x, annotation.end.x);
-    const minY = Math.min(annotation.start.y, annotation.end.y);
-    const maxY = Math.max(annotation.start.y, annotation.end.y);
-    const midX = (minX + maxX) / 2;
-    const midY = (minY + maxY) / 2;
-
-    let handles: { handle: ResizeHandle; point: Point }[];
-
-    if (annotation.type === 'arrow' || annotation.type === 'line') {
-      // For arrows and lines, just show start and end handles
-      handles = [
-        { handle: 'nw', point: annotation.start },
-        { handle: 'se', point: annotation.end },
-      ];
-    } else {
-      handles = [
-        { handle: 'nw', point: { x: minX, y: minY } },
-        { handle: 'n', point: { x: midX, y: minY } },
-        { handle: 'ne', point: { x: maxX, y: minY } },
-        { handle: 'e', point: { x: maxX, y: midY } },
-        { handle: 'se', point: { x: maxX, y: maxY } },
-        { handle: 's', point: { x: midX, y: maxY } },
-        { handle: 'sw', point: { x: minX, y: maxY } },
-        { handle: 'w', point: { x: minX, y: midY } },
-      ];
-    }
-
-    // Apply rotation transform to handle positions
-    const rotation = annotation.rotation || 0;
-    if (rotation !== 0) {
-      const center = getAnnotationCenter(annotation);
-      handles = handles.map(({ handle, point }) => {
-        const dx = point.x - center.x;
-        const dy = point.y - center.y;
-        const rotatedX = center.x + dx * Math.cos(rotation) - dy * Math.sin(rotation);
-        const rotatedY = center.y + dx * Math.sin(rotation) + dy * Math.cos(rotation);
-        return { handle, point: { x: rotatedX, y: rotatedY } };
-      });
-    }
-
-    return handles;
-  };
-
-  // Check if a point is on a resize handle
-  const findResizeHandleAtPoint = (point: Point, annotation: Annotation): ResizeHandle | null => {
-    const handles = getResizeHandles(annotation);
-    const handleRadius = 6;
-
-    for (const { handle, point: handlePoint } of handles) {
-      const dx = point.x - handlePoint.x;
-      const dy = point.y - handlePoint.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      if (distance <= handleRadius) {
-        return handle;
-      }
-    }
-    return null;
-  };
-
-  // Get rotation handle position (above the top center of the annotation)
-  const getRotationHandlePosition = (annotation: Annotation): Point | null => {
-    if (!['rectangle', 'circle', 'arrow', 'line', 'highlight', 'blur'].includes(annotation.type)) {
-      return null;
-    }
-
-    if (!annotation.start || !annotation.end) return null;
-
-    const minY = Math.min(annotation.start.y, annotation.end.y);
-    const midX = (annotation.start.x + annotation.end.x) / 2;
-    const handleDistance = 25; // Distance above the annotation
-
-    // Apply current rotation to find actual handle position
-    const center = getAnnotationCenter(annotation);
-    const rotation = annotation.rotation || 0;
-
-    // Rotate the handle position around the center
-    const handleY = minY - handleDistance;
-    const dx = midX - center.x;
-    const dy = handleY - center.y;
-    const rotatedX = center.x + dx * Math.cos(rotation) - dy * Math.sin(rotation);
-    const rotatedY = center.y + dx * Math.sin(rotation) + dy * Math.cos(rotation);
-
-    return { x: rotatedX, y: rotatedY };
-  };
-
-  // Check if a point is on the rotation handle
-  const isPointOnRotationHandle = (point: Point, annotation: Annotation): boolean => {
-    const handlePos = getRotationHandlePosition(annotation);
-    if (!handlePos) return false;
-
-    const handleRadius = 8;
-    const dx = point.x - handlePos.x;
-    const dy = point.y - handlePos.y;
-    return Math.sqrt(dx * dx + dy * dy) <= handleRadius;
-  };
-
-  // Get the anchor corner for resize operations
-  // For corner handles: opposite corner
-  // For edge handles: one of the opposite corners (to keep that corner fixed)
-  const getAnchorHandle = (handle: ResizeHandle): ResizeHandle => {
-    const anchors: Record<ResizeHandle, ResizeHandle> = {
-      'nw': 'se', 'n': 'se', 'ne': 'sw', 'e': 'sw',
-      'se': 'nw', 's': 'nw', 'sw': 'ne', 'w': 'ne',
-    };
-    return anchors[handle];
-  };
-
-  // Get unrotated corner position for a handle
-  const getLocalCorner = (annotation: Annotation, handle: ResizeHandle): Point | null => {
-    if (!annotation.start || !annotation.end) return null;
-
-    const minX = Math.min(annotation.start.x, annotation.end.x);
-    const maxX = Math.max(annotation.start.x, annotation.end.x);
-    const minY = Math.min(annotation.start.y, annotation.end.y);
-    const maxY = Math.max(annotation.start.y, annotation.end.y);
-    const midX = (minX + maxX) / 2;
-    const midY = (minY + maxY) / 2;
-
-    switch (handle) {
-      case 'nw': return { x: minX, y: minY };
-      case 'n': return { x: midX, y: minY };
-      case 'ne': return { x: maxX, y: minY };
-      case 'e': return { x: maxX, y: midY };
-      case 'se': return { x: maxX, y: maxY };
-      case 's': return { x: midX, y: maxY };
-      case 'sw': return { x: minX, y: maxY };
-      case 'w': return { x: minX, y: midY };
-    }
-  };
-
-  // Rotate a point around a center
-  const rotatePoint = (point: Point, center: Point, angle: number): Point => {
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-    const dx = point.x - center.x;
-    const dy = point.y - center.y;
-    return {
-      x: center.x + dx * cos - dy * sin,
-      y: center.y + dx * sin + dy * cos,
-    };
-  };
-
-  // Resize annotation based on handle drag
-  // For rotated annotations, we keep the anchor corner visually fixed
-  const resizeAnnotation = (
-    annotation: Annotation,
-    handle: ResizeHandle,
-    screenDelta: Point,
-    anchorVisualPos: Point
-  ): Annotation => {
-    if (!annotation.start || !annotation.end) return annotation;
-
-    const rotation = annotation.rotation || 0;
-
-    // Transform screen delta to local (unrotated) space
-    const cos = Math.cos(-rotation);
-    const sin = Math.sin(-rotation);
-    const localDelta = {
-      x: screenDelta.x * cos - screenDelta.y * sin,
-      y: screenDelta.x * sin + screenDelta.y * cos,
-    };
-
-    // For arrows, use simple endpoint adjustment
-    if (annotation.type === 'arrow') {
-      if (handle === 'nw') {
-        return { ...annotation, start: { x: annotation.start.x + localDelta.x, y: annotation.start.y + localDelta.y } };
-      } else if (handle === 'se') {
-        return { ...annotation, end: { x: annotation.end.x + localDelta.x, y: annotation.end.y + localDelta.y } };
-      }
-      return annotation;
-    }
-
-    // For non-rotated annotations, use simple resize
-    if (rotation === 0) {
-      let newStart = { ...annotation.start };
-      let newEnd = { ...annotation.end };
-
-      switch (handle) {
-        case 'nw':
-          newStart = { x: annotation.start.x + localDelta.x, y: annotation.start.y + localDelta.y };
-          break;
-        case 'n':
-          newStart = { ...annotation.start, y: annotation.start.y + localDelta.y };
-          break;
-        case 'ne':
-          newStart = { ...annotation.start, y: annotation.start.y + localDelta.y };
-          newEnd = { ...annotation.end, x: annotation.end.x + localDelta.x };
-          break;
-        case 'e':
-          newEnd = { ...annotation.end, x: annotation.end.x + localDelta.x };
-          break;
-        case 'se':
-          newEnd = { x: annotation.end.x + localDelta.x, y: annotation.end.y + localDelta.y };
-          break;
-        case 's':
-          newEnd = { ...annotation.end, y: annotation.end.y + localDelta.y };
-          break;
-        case 'sw':
-          newStart = { ...annotation.start, x: annotation.start.x + localDelta.x };
-          newEnd = { ...annotation.end, y: annotation.end.y + localDelta.y };
-          break;
-        case 'w':
-          newStart = { ...annotation.start, x: annotation.start.x + localDelta.x };
-          break;
-      }
-
-      return { ...annotation, start: newStart, end: newEnd };
-    }
-
-    // For rotated annotations, calculate new bounds keeping anchor corner fixed
-    const oldCenter = getAnnotationCenter(annotation);
-    const anchorHandle = getAnchorHandle(handle);
-
-    // Get anchor corner in local space (this won't change)
-    const anchorLocal = getLocalCorner(annotation, anchorHandle);
-    if (!anchorLocal) return annotation;
-
-    // The anchor's visual position must stay at anchorVisualPos
-    // We need to find newCenter such that:
-    //   rotatePoint(anchorLocal, newCenter, rotation) = anchorVisualPos
-    //
-    // Solving for newCenter:
-    //   anchorVisualPos = newCenter + rotate(anchorLocal - newCenter, rotation)
-    //   anchorVisualPos - newCenter = rotate(anchorLocal - newCenter, rotation)
-    //
-    // Let d = anchorLocal - newCenter (in local coords, this is the offset from center to anchor)
-    // Then: anchorVisualPos = newCenter + rotate(d, rotation)
-    //
-    // For the anchor to stay fixed, we need the offset from center to anchor to be correct.
-    // The anchor's local position relative to start/end determines where it is.
-
-    // Get the dragged corner and calculate its new local position
-    const draggedLocal = getLocalCorner(annotation, handle);
-    if (!draggedLocal) return annotation;
-
-    const newDraggedLocal = {
-      x: draggedLocal.x + localDelta.x,
-      y: draggedLocal.y + localDelta.y,
-    };
-
-    // For edge handles, only one dimension of the dragged point changes
-    let adjustedDraggedLocal = { ...newDraggedLocal };
-    if (handle === 'n' || handle === 's') {
-      adjustedDraggedLocal.x = draggedLocal.x; // Keep X same
-    } else if (handle === 'e' || handle === 'w') {
-      adjustedDraggedLocal.y = draggedLocal.y; // Keep Y same
-    }
-
-    // Calculate new bounds based on anchor (fixed) and dragged (moved) corners
-    let newStart: Point;
-    let newEnd: Point;
-
-    // Determine new start and end from anchor and dragged positions
-    const minX = Math.min(anchorLocal.x, adjustedDraggedLocal.x);
-    const maxX = Math.max(anchorLocal.x, adjustedDraggedLocal.x);
-    const minY = Math.min(anchorLocal.y, adjustedDraggedLocal.y);
-    const maxY = Math.max(anchorLocal.y, adjustedDraggedLocal.y);
-
-    // For edge handles, preserve the perpendicular dimension
-    if (handle === 'n') {
-      newStart = { x: annotation.start.x, y: minY };
-      newEnd = { x: annotation.end.x, y: maxY };
-    } else if (handle === 's') {
-      newStart = { x: annotation.start.x, y: minY };
-      newEnd = { x: annotation.end.x, y: maxY };
-    } else if (handle === 'e') {
-      newStart = { x: minX, y: annotation.start.y };
-      newEnd = { x: maxX, y: annotation.end.y };
-    } else if (handle === 'w') {
-      newStart = { x: minX, y: annotation.start.y };
-      newEnd = { x: maxX, y: annotation.end.y };
-    } else {
-      // Corner handles: both dimensions change
-      newStart = { x: minX, y: minY };
-      newEnd = { x: maxX, y: maxY };
-    }
-
-    // Calculate new center
-    const newCenter = {
-      x: (newStart.x + newEnd.x) / 2,
-      y: (newStart.y + newEnd.y) / 2,
-    };
-
-    // Get anchor position in the NEW bounds (may differ from anchorLocal for edge handles)
-    const newAnchorLocal = getLocalCorner({ ...annotation, start: newStart, end: newEnd }, anchorHandle);
-    if (!newAnchorLocal) return { ...annotation, start: newStart, end: newEnd };
-
-    // Calculate where anchor would appear with new center
-    const anchorNewVisualPos = rotatePoint(newAnchorLocal, newCenter, rotation);
-
-    // Calculate the translation needed to keep anchor at original visual position
-    const visualOffset = {
-      x: anchorVisualPos.x - anchorNewVisualPos.x,
-      y: anchorVisualPos.y - anchorNewVisualPos.y,
-    };
-
-    // Since rotation is applied around the center, and both anchor and center
-    // move by the same local offset, the visual movement equals the local movement.
-    // Therefore: localOffset = visualOffset (no rotation transformation needed)
-    const localOffset = visualOffset;
-
-    // Apply the translation
-    newStart = { x: newStart.x + localOffset.x, y: newStart.y + localOffset.y };
-    newEnd = { x: newEnd.x + localOffset.x, y: newEnd.y + localOffset.y };
-
-    return { ...annotation, start: newStart, end: newEnd };
-  };
-
-  // Get center point of an annotation (for calculating drag offset)
-  const getAnnotationCenter = (annotation: Annotation): Point => {
-    switch (annotation.type) {
-      case 'text':
-      case 'callout':
-        return annotation.position || { x: 0, y: 0 };
-      case 'draw':
-        if (annotation.points && annotation.points.length > 0) {
-          const sumX = annotation.points.reduce((acc, p) => acc + p.x, 0);
-          const sumY = annotation.points.reduce((acc, p) => acc + p.y, 0);
-          return { x: sumX / annotation.points.length, y: sumY / annotation.points.length };
-        }
-        return { x: 0, y: 0 };
-      default:
-        if (annotation.start && annotation.end) {
-          return {
-            x: (annotation.start.x + annotation.end.x) / 2,
-            y: (annotation.start.y + annotation.end.y) / 2,
-          };
-        }
-        return { x: 0, y: 0 };
-    }
-  };
-
-  // Move annotation by delta
-  const moveAnnotation = (annotation: Annotation, delta: Point): Annotation => {
-    switch (annotation.type) {
-      case 'text':
-      case 'callout':
-        return {
-          ...annotation,
-          position: annotation.position
-            ? { x: annotation.position.x + delta.x, y: annotation.position.y + delta.y }
-            : undefined,
-        };
-      case 'draw':
-        return {
-          ...annotation,
-          points: annotation.points?.map((p) => ({ x: p.x + delta.x, y: p.y + delta.y })),
-        };
-      default:
-        return {
-          ...annotation,
-          start: annotation.start
-            ? { x: annotation.start.x + delta.x, y: annotation.start.y + delta.y }
-            : undefined,
-          end: annotation.end
-            ? { x: annotation.end.x + delta.x, y: annotation.end.y + delta.y }
-            : undefined,
-        };
-    }
-  };
+  /** Topmost annotation under a canvas-space point. */
+  const hitTest = useCallback(
+    (point: Point) => findAnnotationAtPoint(annotationsRef.current, point, measureText),
+    [measureText]
+  );
 
   // Duplicate annotation with offset
   const duplicateAnnotation = useCallback((annotation: Annotation): Annotation => {
@@ -1317,7 +766,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
 
     // Handle eraser tool - delete entire annotation on click
     if (selectedTool === 'eraser') {
-      const hitAnnotation = findAnnotationAtPoint(point);
+      const hitAnnotation = hitTest(point);
       if (hitAnnotation) {
         commit((prev) => prev.filter((a) => a.id !== hitAnnotation.id));
       }
@@ -1366,7 +815,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
       }
 
       // Then check for hit on any annotation
-      const hitAnnotation = findAnnotationAtPoint(point);
+      const hitAnnotation = hitTest(point);
 
       if (hitAnnotation) {
         setSelectedAnnotationId(hitAnnotation.id);
@@ -1464,7 +913,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     if (selectedTool !== 'move') return;
 
     const point = getCanvasPoint(e);
-    const hitAnnotation = findAnnotationAtPoint(point);
+    const hitAnnotation = hitTest(point);
     if (!hitAnnotation || hitAnnotation.type !== 'text' || !hitAnnotation.position) return;
 
     // Stop the drag started by the second mousedown
@@ -1551,15 +1000,21 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     setIsDrawing(false);
   };
 
-  // Build text-specific properties from current toolbar state (single source of truth)
-  const buildTextProperties = () => ({
-    fontSize,
-    color: selectedColor,
-    opacity,
-    bgColor: textBgColor || undefined,
-    outlineColor: textOutlineColor || undefined,
-    outlineWidth: textOutlineColor ? textOutlineWidth : undefined,
-  });
+  // Build text-specific properties from current toolbar state (single source of
+  // truth). Memoized on exactly the toolbar values it reads, so the effect that
+  // syncs a selected text annotation can depend on it without re-running every
+  // render.
+  const buildTextProperties = useCallback(
+    () => ({
+      fontSize,
+      color: selectedColor,
+      opacity,
+      bgColor: textBgColor || undefined,
+      outlineColor: textOutlineColor || undefined,
+      outlineWidth: textOutlineColor ? textOutlineWidth : undefined,
+    }),
+    [fontSize, selectedColor, opacity, textBgColor, textOutlineColor, textOutlineWidth]
+  );
 
   // Text input handlers
   const submitText = () => {
@@ -1767,10 +1222,12 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     onSave(dataUrl);
   }, [getAnnotatedImage, onSave]);
 
-  // Redraw on annotation changes
+  // Redraw on annotation changes, and whenever a newly loaded image is adopted
+  // (imageGeneration) — the load effect's own redraw runs with the annotations
+  // captured when the load started, which may already be stale.
   useEffect(() => {
     redrawCanvas();
-  }, [redrawCanvas]);
+  }, [redrawCanvas, imageGeneration]);
 
   // Handle resize
   useEffect(() => {
@@ -1964,45 +1421,6 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     }
   };
 
-  // Cursor for resize handles (accounting for rotation)
-  const getCursorForHandle = (handle: ResizeHandle, rotation: number = 0): string => {
-    // Define the base angle for each handle (in radians)
-    const handleAngles: Record<ResizeHandle, number> = {
-      'e': 0,
-      'se': Math.PI / 4,
-      's': Math.PI / 2,
-      'sw': (3 * Math.PI) / 4,
-      'w': Math.PI,
-      'nw': -(3 * Math.PI) / 4,
-      'n': -Math.PI / 2,
-      'ne': -Math.PI / 4,
-    };
-
-    // Calculate the effective angle after rotation
-    let effectiveAngle = handleAngles[handle] + rotation;
-
-    // Normalize to 0 to 2π range
-    while (effectiveAngle < 0) effectiveAngle += Math.PI * 2;
-    while (effectiveAngle >= Math.PI * 2) effectiveAngle -= Math.PI * 2;
-
-    // Determine cursor based on effective angle (8 sectors of 22.5° each)
-    // We map to 4 cursor types (each covers 2 opposite sectors)
-    const sector = Math.round((effectiveAngle / Math.PI) * 4) % 4;
-
-    switch (sector) {
-      case 0: // ~0° or ~180° (horizontal)
-        return 'ew-resize';
-      case 1: // ~45° or ~225° (diagonal)
-        return 'nwse-resize';
-      case 2: // ~90° or ~270° (vertical)
-        return 'ns-resize';
-      case 3: // ~135° or ~315° (other diagonal)
-        return 'nesw-resize';
-      default:
-        return 'pointer';
-    }
-  };
-
   // Update selected text annotation when toolbar properties change
   useEffect(() => {
     if (!selectedAnnotationId || selectedTool !== 'move') return;
@@ -2028,7 +1446,7 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
         a.id === selectedAnnotationId ? { ...a, ...buildTextProperties() } : a
       )
     );
-  }, [selectedAnnotationId, selectedTool, fontSize, selectedColor, opacity, textBgColor, textOutlineColor, textOutlineWidth, beginGesture]);
+  }, [selectedAnnotationId, selectedTool, fontSize, selectedColor, opacity, textBgColor, textOutlineColor, textOutlineWidth, beginGesture, buildTextProperties]);
 
   // Restore toolbar defaults when deselecting
   useEffect(() => {

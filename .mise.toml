@@ -17,6 +17,10 @@ description = "Build extension for production"
 run = "bun run compile"
 description = "Type check the project"
 
+[tasks.lint]
+run = "bun run lint"
+description = "Lint the project with oxlint"
+
 [tasks.test]
 run = "bun run test"
 description = "Run the test suite"

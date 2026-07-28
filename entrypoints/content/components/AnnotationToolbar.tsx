@@ -25,7 +25,11 @@ import {
   SparkleIcon,
 } from '../icons';
 
-export type AnnotationTool = 'move' | 'draw' | 'rectangle' | 'circle' | 'arrow' | 'line' | 'text' | 'eraser' | 'callout' | 'blur' | 'highlight' | 'stamp';
+import type { AnnotationTool } from '@/src/core/annotation/types';
+
+// Defined in core alongside the annotation model, re-exported here because it
+// is part of this component's public props API.
+export type { AnnotationTool };
 
 export interface AnnotationToolbarProps {
   /** Currently selected tool */

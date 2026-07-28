@@ -6,6 +6,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/); versions follow
 ## [Unreleased]
 
 ### Fixed
+- Rotated annotations could not be clicked where they were drawn — hit testing compared the click against unrotated bounds, so a turned shape kept an invisible axis-aligned hit box while its visible border did nothing
+- Stamps could not be moved: dragging one did nothing and duplicating it dropped the copy exactly on the original
+- Resizing a rotated line reversed its direction, because it was rebuilt from bounding-box corners instead of its endpoints
 - Undo could run backwards: a toolbar edit applied by click left its gesture open, so its older snapshot landed on the history stack after a newer one
 - Returning to the page via the browser's Back button (bfcache) permanently disabled the extension in that tab — no annotate buttons and no chat attachment until a manual reload
 - Blur regions drifted off the content they redact after a window resize, and generated prompts named the wrong region for each annotation
@@ -19,6 +22,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/); versions follow
 - The toolbar icon's tooltip shipped WXT's scaffold default, "Default Popup Title"
 
 ### Changed
+- Annotation geometry (hit testing, transform handles, resize, rotation) moved to `src/core/annotation/`, where it is pure and covered by tests — the overlay component dropped from 2554 to 1972 lines
+- `oxlint` now gates CI and releases, with `react-hooks/exhaustive-deps` and `rules-of-hooks` as errors
 - Undo history is capped at 50 steps
 - `SiteAdapter.getLightboxInjectionPoint()` and `getLightboxImage()` are replaced by a single optional `lightbox` object — the two were only ever valid together
 - `SiteAdapter.attachToChat()` is now async and resolves once the file is genuinely attached

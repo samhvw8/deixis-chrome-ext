@@ -75,7 +75,7 @@ function getOverlayContainer(): { host: HTMLElement; shadow: ShadowRoot; mountPo
 /**
  * Open annotation mode for a given image
  */
-function openAnnotation(imageUrl: string, imageBounds?: DOMRect) {
+function openAnnotation(imageUrl: string) {
   if (isAnnotationOpen) return;
 
   isAnnotationOpen = true;
@@ -96,7 +96,6 @@ function openAnnotation(imageUrl: string, imageBounds?: DOMRect) {
         { onError: closeAnnotation },
         React.createElement(AnnotationOverlay, {
           imageUrl: imageUrl,
-          imageBounds: imageBounds,
           onClose: closeAnnotation,
           onCopy: handleCopy,
           onSave: handleSave,
@@ -201,7 +200,7 @@ function injectButtons() {
       // Read element.src live at click time, not a captured value — the button
       // is created once but the image's src can still be updated by the site
       // (e.g. set asynchronously after injection) before the user clicks
-      onClick: () => openAnnotation(element.src, element.getBoundingClientRect()),
+      onClick: () => openAnnotation(element.src),
       style: config.style,
       showOnHover: config.showOnHover,
       hoverTarget: config.hoverTarget || config.container,
