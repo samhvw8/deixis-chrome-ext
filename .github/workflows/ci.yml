@@ -37,4 +37,8 @@ jobs:
         with:
           name: deixis-chrome-${{ github.sha }}
           path: .output/*-chrome.zip
+          # WXT writes to .output, and upload-artifact treats any path under a
+          # dot-directory as hidden and silently skips it. Without this the step
+          # fails with "No files were found" even though the zip exists.
+          include-hidden-files: true
           if-no-files-found: error
