@@ -2,6 +2,10 @@ import { defineConfig } from 'wxt';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
+// Imported from the zero-import pattern module, NOT the registry: config
+// evaluation runs in Node, so pulling in adapter runtime code would drag the
+// browser polyfill (and any DOM access) into a context without a DOM.
+import { getAllMatches } from './src/core/adapters/matches';
 
 // Get git version info at build time
 function getGitVersion(): string {
@@ -34,10 +38,11 @@ export default defineConfig({
   manifest: {
     name: 'Deixis - Visual Annotation for AI',
     description: 'Annotate images in AI chats. Show what you mean instead of describing it with words.',
-    version: '0.6.0',
-    permissions: ['activeTab', 'contextMenus', 'clipboardWrite', 'tabs', 'storage'],
-    host_permissions: [
-      'https://gemini.google.com/*',
-    ],
+    // `version` is intentionally omitted — WXT reads it from package.json, which
+    // is the single source of truth (release.yml verifies the tag against it).
+    // `tabs` is deliberately NOT requested: tabs.query/reload/sendMessage work
+    // without it, and captureVisibleTab is gated by activeTab, not tabs.
+    permissions: ['activeTab', 'contextMenus', 'clipboardWrite', 'storage'],
+    host_permissions: getAllMatches(),
   },
 });

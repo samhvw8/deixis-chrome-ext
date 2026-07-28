@@ -1,21 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ChevronDownIcon } from '../icons';
+import { ANNOTATION_COLORS, type ColorOption } from '@/src/core/colors';
+import { createLogger } from '@/src/core/logger';
 
-export interface ColorOption {
-  value: string;
-  name: string;
-}
-
-export const ANNOTATION_COLORS: ColorOption[] = [
-  { value: '#22C55E', name: 'Green' },
-  { value: '#EF4444', name: 'Red' },
-  { value: '#3B82F6', name: 'Blue' },
-  { value: '#EAB308', name: 'Yellow' },
-  { value: '#F97316', name: 'Orange' },
-  { value: '#A855F7', name: 'Purple' },
-  { value: '#06B6D4', name: 'Cyan' },
-  { value: '#FFFFFF', name: 'White' },
-];
+const logger = createLogger();
 
 export interface ColorPickerProps {
   /** Currently selected color value */
@@ -111,7 +99,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
 
   const handleColorSelect = useCallback(
     (color: string) => {
-      console.log('[Deixis] Color selected:', color);
+      logger.log('Color selected:', color);
       onColorChange(color);
       setIsOpen(false);
     },

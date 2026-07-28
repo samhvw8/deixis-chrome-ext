@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ToolButton } from './ToolButton';
-import { ColorPicker, ANNOTATION_COLORS } from './ColorPicker';
+import { ColorPicker } from './ColorPicker';
+import { ANNOTATION_COLORS } from '@/src/core/colors';
 import {
   MoveIcon,
   PencilIcon,

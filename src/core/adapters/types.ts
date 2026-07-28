@@ -58,18 +58,31 @@ export interface SiteAdapter {
   /** Get injection point for annotation button on image container */
   getButtonInjectionPoint(image: HTMLImageElement): ButtonInjectionConfig | null;
 
-  /** Get injection point for lightbox/dialog button (optional) */
-  getLightboxInjectionPoint?(): ButtonInjectionConfig | null;
+  /**
+   * Support for the site's lightbox / expanded-image dialog (optional).
+   *
+   * Grouped because the two halves are useless apart: a button with no image to
+   * annotate, or an image with nowhere to put the button. Two independent
+   * optional methods let an adapter declare one and not the other, which the
+   * content script then had to catch at runtime.
+   */
+  lightbox?: {
+    /** Where to inject the annotate button inside the open dialog. */
+    getInjectionPoint(): ButtonInjectionConfig | null;
+    /** The image currently displayed in that dialog. */
+    getImage(): HTMLImageElement | null;
+  };
 
   /** Watch for dynamically loaded images */
   observeImageChanges(callback: (images: AnnotatableImage[]) => void): () => void;
 
-  /** Site-specific image URL processing (handle CDN, proxies, etc.) */
-  processImageUrl?(url: string): string | Promise<string>;
-
   /**
    * Attach an image file directly to the site's chat input (optional), and
-   * insert the given prompt text alongside it. Returns true on success.
+   * insert the given prompt text alongside it.
+   *
+   * Async because attaching is: a site may need to await an upload before the
+   * result is known. Resolve `true` only once the file is actually attached —
+   * the caller falls back to the clipboard copy on `false`.
    */
-  attachToChat?(file: File, promptText?: string): boolean;
+  attachToChat?(file: File, promptText?: string): Promise<boolean>;
 }

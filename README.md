@@ -38,7 +38,7 @@ Deixis (Greek: "to show, to point out") is a Chrome extension that enables preci
   - Copy annotated image to clipboard
   - Auto-attach annotated image directly to the chat input (Gemini)
   - Download as PNG with annotations embedded
-  - Preserves original image quality
+  - Exports at the source image's resolution (up to 4096px), not the smaller on-screen preview size
 
 - **User Experience**
   - Non-intrusive hover-to-reveal buttons on images

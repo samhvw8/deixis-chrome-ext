@@ -17,6 +17,10 @@ description = "Build extension for production"
 run = "bun run compile"
 description = "Type check the project"
 
+[tasks.test]
+run = "bun run test"
+description = "Run the test suite"
+
 [tasks.zip]
 run = "bun run zip"
 description = "Create extension zip for distribution"

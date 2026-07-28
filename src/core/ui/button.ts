@@ -122,16 +122,14 @@ export function createDeixisButton(options: DeixisButtonOptions): HTMLElement {
     options.hoverTarget.addEventListener('mouseleave', () => host.classList.remove('visible'));
   }
 
-  // Click handlers
-  const button = shadow.querySelector('.deixis-btn');
-  const handleClick = (e: Event) => {
+  // Click handler. Bound on the host only: a click on the inner button is
+  // retargeted to the host as it crosses the shadow boundary, so one listener
+  // covers both. Binding both would double-fire if either stopped propagating.
+  host.addEventListener('click', (e: Event) => {
     e.stopPropagation();
     e.preventDefault();
     options.onClick();
-  };
-
-  button?.addEventListener('click', handleClick);
-  host.addEventListener('click', handleClick);
+  });
 
   return host;
 }

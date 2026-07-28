@@ -5,26 +5,33 @@
  */
 
 import { getAllMatches } from '../src/core/adapters/registry';
+import { createLogger, initLogging } from '../src/core/logger';
+
+const logger = createLogger('BG');
 
 export default defineBackground(() => {
+  initLogging();
+
   // On startup, check if we need to reload a tab (after extension reload)
-  browser.storage.local.get('pendingTabReload').then(async (result) => {
-    const pending = result.pendingTabReload as { tabId: number; timestamp: number } | undefined;
-    if (pending) {
+  browser.storage.local
+    .get<{ pendingTabReload?: { tabId: number; timestamp: number } }>('pendingTabReload')
+    .then(async (result) => {
+      const pending = result.pendingTabReload;
+      if (!pending) return;
+
       const { tabId, timestamp } = pending;
       // Only reload if the flag was set within the last 5 seconds
       if (Date.now() - timestamp < 5000) {
         try {
           await browser.tabs.reload(tabId);
-          console.log('[Deixis BG] Reloaded tab after extension restart:', tabId);
+          logger.log('Reloaded tab after extension restart:', tabId);
         } catch (error) {
-          console.log('[Deixis BG] Could not reload tab:', error);
+          logger.warn('Could not reload tab:', error);
         }
       }
       // Clear the flag
       await browser.storage.local.remove('pendingTabReload');
-    }
-  });
+    });
 
   // Create context menu on install with all supported site patterns
   browser.runtime.onInstalled.addListener(() => {
@@ -50,65 +57,31 @@ export default defineBackground(() => {
   // Handle messages from content script
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'DEIXIS_READY') {
-      console.log('Deixis content script ready on:', sender.tab?.url, 'adapter:', message.adapterId);
+      logger.log('Content script ready on:', sender.tab?.url, 'adapter:', message.adapterId);
       sendResponse({ status: 'ok' });
       return true;
     }
 
-    // Capture visible tab as screenshot
+    // Capture visible tab as screenshot. Used as the export fallback when the
+    // annotation canvas is tainted by a cross-origin image.
     if (message.type === 'DEIXIS_CAPTURE_TAB' && sender.tab?.id) {
-      console.log('[Deixis BG] Capturing tab screenshot');
-      chrome.tabs.captureVisibleTab(sender.tab.windowId, { format: 'png' })
+      logger.log('Capturing tab screenshot');
+      browser.tabs
+        .captureVisibleTab(sender.tab.windowId, { format: 'png' })
         .then((dataUrl) => {
-          console.log('[Deixis BG] Tab captured successfully');
+          logger.log('Tab captured successfully');
           sendResponse({ success: true, dataUrl });
         })
-        .catch((error) => {
-          console.error('[Deixis BG] Capture error:', error);
-          sendResponse({ success: false, error: error.message });
+        .catch((error: unknown) => {
+          logger.error('Capture error:', error);
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+          });
         });
       return true; // Keep message channel open for async response
     }
 
-    return true;
+    return false;
   });
 });
-
-/**
- * Fetch an image and convert to data URL
- * Uses fetch without credentials since Google returns Access-Control-Allow-Origin: *
- * which doesn't work with credentials mode
- */
-async function fetchImageAsDataUrl(imageUrl: string): Promise<string> {
-  console.log('[Deixis BG] Fetching image:', imageUrl);
-
-  try {
-    // Fetch without credentials - Google's CDN returns CORS: * which requires credentials: omit
-    const response = await fetch(imageUrl, {
-      credentials: 'omit',
-      mode: 'cors',
-    });
-
-    console.log('[Deixis BG] Fetch response:', response.status, response.ok);
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} ${response.statusText}`);
-    }
-
-    const blob = await response.blob();
-    console.log('[Deixis BG] Got blob, size:', blob.size);
-
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        console.log('[Deixis BG] Converted to data URL');
-        resolve(reader.result as string);
-      };
-      reader.onerror = () => reject(new Error('Failed to read blob'));
-      reader.readAsDataURL(blob);
-    });
-  } catch (error) {
-    console.error('[Deixis BG] Fetch error details:', error);
-    throw error;
-  }
-}

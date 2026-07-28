@@ -44,12 +44,13 @@ This guide walks you through creating a site adapter for Deixis. A site adapter 
    ↓
 4. Register Adapter in Registry
    ↓
-5. Add Host Permissions
+5. Build and Test
    ↓
-6. Build and Test
-   ↓
-7. Iterate and Refine
+6. Iterate and Refine
 ```
+
+> Host permissions, content-script matches, and the context menu are all
+> derived from the registry — there is no separate manifest step.
 
 ---
 
@@ -160,6 +161,9 @@ Start with this template:
  */
 
 import type { SiteAdapter, AnnotatableImage, ButtonInjectionConfig } from '../core/adapters/types';
+import { createLogger } from '../core/logger';
+
+const logger = createLogger();
 
 export const [sitename]Adapter: SiteAdapter = {
   id: '[sitename]',
@@ -167,7 +171,7 @@ export const [sitename]Adapter: SiteAdapter = {
   matches: ['https://[domain]/*'],
 
   init() {
-    console.log('[Deixis] [Site Name] adapter initialized');
+    logger.log('[Site Name] adapter initialized');
   },
 
   destroy() {
@@ -186,16 +190,29 @@ export const [sitename]Adapter: SiteAdapter = {
   },
 
   observeImageChanges(callback: (images: AnnotatableImage[]) => void): () => void {
-    // TODO: Implement mutation observer
+    // Coalesce mutation bursts into one callback per frame. Injecting buttons
+    // mutates the DOM too, so an un-debounced observer re-triggers itself.
+    let frame: number | null = null;
+
     const observer = new MutationObserver(() => {
-      callback(this.findImages());
+      if (frame !== null) return;
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        callback(this.findImages());
+      });
     });
 
     observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
   },
 };
 ```
+
+> Use `createLogger()` rather than `console.log` — output is gated behind the
+> popup's "Enable Logging" toggle so production installs stay quiet.
 
 #### 3.2 Implement `findImages()`
 
@@ -380,12 +397,22 @@ getButtonInjectionPoint(image: HTMLImageElement): ButtonInjectionConfig | null {
 - Use `top`, `left`, `right`, `bottom` for positioning
 - Add margins for spacing in flex/grid layouts
 
-#### 3.4 Implement `getLightboxInjectionPoint()` (Optional)
+#### 3.4 Implement `lightbox` (Optional)
 
-If the site has lightbox/modal views for images, implement this method.
+If the site has lightbox/modal views for images, provide the `lightbox` object.
+Its two halves are useless apart — a button with no image to annotate, or an
+image with nowhere to put the button — so they are declared together, and every
+site-specific selector stays inside the adapter.
 
 ```typescript
-getLightboxInjectionPoint(): ButtonInjectionConfig | null {
+lightbox: {
+  getImage(): HTMLImageElement | null {
+    // The image currently shown in the expanded view
+    const img = document.querySelector<HTMLImageElement>('[role="dialog"] img');
+    return img?.src ? img : null;
+  },
+
+  getInjectionPoint(): ButtonInjectionConfig | null {
   // Find lightbox container (common patterns)
   const lightboxActions = document.querySelector('.modal-actions, .dialog-buttons, [role="dialog"] .actions') as HTMLElement;
 
@@ -399,8 +426,9 @@ getLightboxInjectionPoint(): ButtonInjectionConfig | null {
       position: 'relative',
       marginRight: '8px',
     },
-  };
-}
+    };
+  },
+},
 ```
 
 **Detection Tips:**
@@ -474,35 +502,14 @@ observeImageChanges(callback: (images: AnnotatableImage[]) => void): () => void 
 }
 ```
 
-#### 3.6 Implement `processImageUrl()` (Optional)
+#### 3.6 Implement `attachToChat()` (Optional)
 
-Transform image URLs if needed (CDN URLs, proxy URLs, authentication).
-
-```typescript
-processImageUrl(url: string): string {
-  // Example: Convert thumbnail URL to full-size URL
-  return url.replace('/thumbnails/', '/images/').replace('_thumb.jpg', '.jpg');
-}
-
-// Async example for fetching signed URLs
-async processImageUrl(url: string): Promise<string> {
-  if (url.startsWith('/api/image/')) {
-    const response = await fetch(url);
-    const data = await response.json();
-    return data.signedUrl;
-  }
-  return url;
-}
-```
-
-#### 3.7 Implement `attachToChat()` (Optional)
-
-Attach the annotated image directly to the site's chat input after Copy, so users skip the manual paste step. Return `true` on success; on `false` the clipboard copy remains as the fallback.
+Attach the annotated image directly to the site's chat input after Copy, so users skip the manual paste step. Resolve `true` only once the file is actually attached; on `false` the clipboard copy remains as the fallback.
 
 Two common strategies (see `src/adapters/gemini.ts` for the reference implementation):
 
 ```typescript
-attachToChat(file: File): boolean {
+async attachToChat(file: File): Promise<boolean> {
   const dataTransfer = new DataTransfer();
   dataTransfer.items.add(file);
 
@@ -548,57 +555,51 @@ export const siteAdapters: SiteAdapter[] = [
 ];
 ```
 
----
+The registry is the only place you need to edit. `wxt.config.ts` (host
+permissions), `entrypoints/content.tsx` (content-script matches), and the
+background context menu all derive their URL patterns from `getAllMatches()`,
+so registering the adapter wires up the manifest automatically.
 
-### Step 5: Add Host Permissions
-
-Update `wxt.config.ts` to include your site's URL:
+Include every URL variant your site uses in the adapter's `matches` array:
 
 ```typescript
-// wxt.config.ts
-
-export default defineConfig({
-  // ... other config
-  manifest: {
-    // ... other manifest fields
-    host_permissions: [
-      'https://gemini.google.com/*',
-      'https://chat.openai.com/*',  // Add your site
-      'https://chatgpt.com/*',      // Include all URL variants
-    ],
-  },
-});
+matches: [
+  'https://chat.openai.com/*',
+  'https://chatgpt.com/*',
+],
 ```
 
 ---
 
-### Step 6: Build and Test
+### Step 5: Build and Test
 
-#### 6.1 Build Extension
+#### 5.1 Type Check and Build
 
 ```bash
+bun run compile   # fails on type errors — the build alone does not
+bun run test
 bun run build
 ```
 
-Check for TypeScript errors. Fix any type mismatches.
+Fix any type mismatches before loading the extension.
 
-#### 6.2 Load Extension in Chrome
+#### 5.2 Load Extension in Chrome
 
 1. Navigate to `chrome://extensions/`
 2. Enable "Developer mode" (top right)
 3. Click "Load unpacked"
 4. Select `.output/chrome-mv3` directory
 
-#### 6.3 Test on Target Site
+#### 5.3 Test on Target Site
 
 1. Navigate to your target site (e.g., `https://chat.openai.com/`)
 2. Open DevTools Console
-3. Look for initialization message: `[Deixis] ChatGPT adapter initialized`
+3. Enable "Enable Logging" in the Deixis popup, then look for: `[Deixis] ChatGPT adapter initialized`
 4. Verify buttons appear on images (hover if `showOnHover: true`)
 5. Click button to open annotation overlay
 6. Test full workflow: draw → rotate → resize → export
 
-#### 6.4 Debug Issues
+#### 5.4 Debug Issues
 
 **No buttons appearing:**
 - Check Console for errors
@@ -624,7 +625,7 @@ Check for TypeScript errors. Fix any type mismatches.
 
 ---
 
-### Step 7: Iterate and Refine
+### Step 6: Iterate and Refine
 
 #### Test Edge Cases
 
@@ -777,19 +778,26 @@ export const aiChatAdapter: SiteAdapter = {
     };
   },
 
-  getLightboxInjectionPoint(): ButtonInjectionConfig | null {
-    const lightboxActions = document.querySelector('[role="dialog"] .actions') as HTMLElement;
-    if (!lightboxActions) return null;
+  lightbox: {
+    getInjectionPoint(): ButtonInjectionConfig | null {
+      const lightboxActions = document.querySelector('[role="dialog"] .actions') as HTMLElement;
+      if (!lightboxActions) return null;
 
-    return {
-      container: lightboxActions,
-      position: 'prepend',
-      showOnHover: false,
-      style: {
-        position: 'relative',
-        marginRight: '8px',
-      },
-    };
+      return {
+        container: lightboxActions,
+        position: 'prepend',
+        showOnHover: false,
+        style: {
+          position: 'relative',
+          marginRight: '8px',
+        },
+      };
+    },
+
+    getImage(): HTMLImageElement | null {
+      const img = document.querySelector<HTMLImageElement>('[role="dialog"] img');
+      return img?.src ? img : null;
+    },
   },
 
   observeImageChanges(callback) {
@@ -811,11 +819,6 @@ export const aiChatAdapter: SiteAdapter = {
       observer.disconnect();
       clearTimeout(timeoutId);
     };
-  },
-
-  processImageUrl(url: string): string {
-    // Convert thumbnail URLs to full-size
-    return url.replace('/thumb/', '/full/');
   },
 };
 ```
@@ -949,7 +952,7 @@ A: Use "Load unpacked" in Developer mode to load from local build output.
 A: Yes, add multiple patterns to `matches` array: `['https://site.com/*', 'https://www.site.com/*']`
 
 **Q: What if image URLs require authentication?**
-A: Implement `processImageUrl()` to fetch authenticated URLs or transform proxy URLs.
+A: Return an already-usable URL from `findImages()`. The overlay loads it with `crossOrigin="anonymous"` and falls back to a plain load, then to snapshotting the live `<img>` element, so an image the page can already display is annotatable even when it can't be re-fetched.
 
 ---
 

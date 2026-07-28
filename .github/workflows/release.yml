@@ -1,8 +1,11 @@
 name: Release
 
 # Auto-publish to the Chrome Web Store when a version tag is pushed:
-#   npm version patch   # or edit versions + `git tag vX.Y.Z`
+#   npm version patch   # bumps package.json (the single version source) + tags
 #   git push --follow-tags
+#
+# This is the ONLY workflow that publishes releases. CI (ci.yml) covers
+# push/PR builds; do not add another release job or the two will race.
 on:
   push:
     tags:
@@ -15,11 +18,21 @@ jobs:
       contents: write # create the GitHub Release
     steps:
       - uses: actions/checkout@v4
+        with:
+          # wxt.config.ts runs `git describe --tags` for __GIT_VERSION__, which
+          # the popup displays. The default shallow clone fetches no tags.
+          fetch-depth: 0
 
       - uses: oven-sh/setup-bun@v2
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Type check
+        run: bun run compile
+
+      - name: Test
+        run: bun run test
 
       - name: Build & zip
         run: bun run zip
@@ -27,9 +40,15 @@ jobs:
       - name: Verify tag matches manifest version
         run: |
           TAG="${GITHUB_REF_NAME#v}"
-          VER=$(jq -r .version .output/chrome-mv3/manifest.json)
+          # Chrome's version field accepts only dotted integers, so WXT strips a
+          # prerelease suffix into version_name: package.json 0.7.0-beta.1 emits
+          # version "0.7.0" + version_name "0.7.0-beta.1". Compare against
+          # version_name when present, or a tag like v0.7.0-beta.1 would fail
+          # this check while package.json was in fact correct.
+          MANIFEST=.output/chrome-mv3/manifest.json
+          VER=$(jq -r '.version_name // .version' "$MANIFEST")
           if [ "$TAG" != "$VER" ]; then
-            echo "::error::Tag v$TAG does not match built manifest version $VER (bump wxt.config.ts + package.json)"
+            echo "::error::Tag v$TAG does not match built manifest version $VER (bump package.json)"
             exit 1
           fi
           echo "Publishing version $VER"
@@ -41,6 +60,11 @@ jobs:
           CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
           CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
           CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+          # Staged rollout. A bad build reaches 10% of users instead of all of
+          # them; raise it in the dashboard once the version looks healthy.
+          # Note: the store's Rollback discards any pending review submission,
+          # so roll back OR submit a fix — never both at once.
+          CHROME_DEPLOY_PERCENTAGE: '10'
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

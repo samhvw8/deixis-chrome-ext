@@ -6,7 +6,7 @@
  * label) so an image model can act on the annotated image precisely.
  */
 
-import { ANNOTATION_COLORS } from '../components/ColorPicker';
+import { ANNOTATION_COLORS } from '@/src/core/colors';
 
 export interface Point {
   x: number;

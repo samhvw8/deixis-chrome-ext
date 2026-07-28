@@ -1,17 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { siteAdapters } from '@/src/core/adapters/registry';
-
-// Annotation colors - same as in ColorPicker.tsx
-const ANNOTATION_COLORS = [
-  { value: '#22C55E', name: 'Green' },
-  { value: '#EF4444', name: 'Red' },
-  { value: '#3B82F6', name: 'Blue' },
-  { value: '#EAB308', name: 'Yellow' },
-  { value: '#F97316', name: 'Orange' },
-  { value: '#A855F7', name: 'Purple' },
-  { value: '#06B6D4', name: 'Cyan' },
-  { value: '#FFFFFF', name: 'White' },
-];
+import { ANNOTATION_COLORS, DEFAULT_BRUSH_COLOR } from '@/src/core/colors';
 
 // Icons as SVG components with explicit sizing
 const RefreshIcon = () => (
@@ -106,12 +95,16 @@ const RefreshPageIcon = () => (
 
 type Theme = 'light' | 'dark';
 
-const DEFAULT_COLOR = '#22C55E'; // Green
+interface PopupSettings {
+  loggingEnabled?: boolean;
+  theme?: Theme;
+  defaultBrushColor?: string;
+}
 
 function App() {
   const [loggingEnabled, setLoggingEnabled] = useState(false);
   const [theme, setTheme] = useState<Theme>('dark');
-  const [defaultColor, setDefaultColor] = useState(DEFAULT_COLOR);
+  const [defaultColor, setDefaultColor] = useState(DEFAULT_BRUSH_COLOR);
 
   // Git version injected at build time (e.g., "v0.3.0-beta-4-g56fe0ce")
   const version = __GIT_VERSION__;
@@ -119,15 +112,17 @@ function App() {
   // Load initial state
   useEffect(() => {
     // Get logging state, theme, and default color from storage
-    browser.storage.local.get(['loggingEnabled', 'theme', 'defaultBrushColor']).then((result) => {
-      setLoggingEnabled(result.loggingEnabled ?? false);
-      const savedTheme = result.theme ?? 'dark';
-      setTheme(savedTheme);
-      document.documentElement.dataset.theme = savedTheme;
-      if (result.defaultBrushColor) {
-        setDefaultColor(result.defaultBrushColor);
-      }
-    });
+    browser.storage.local
+      .get<PopupSettings>(['loggingEnabled', 'theme', 'defaultBrushColor'])
+      .then((result) => {
+        setLoggingEnabled(result.loggingEnabled ?? false);
+        const savedTheme = result.theme ?? 'dark';
+        setTheme(savedTheme);
+        document.documentElement.dataset.theme = savedTheme;
+        if (result.defaultBrushColor) {
+          setDefaultColor(result.defaultBrushColor);
+        }
+      });
   }, []);
 
   // Handle reload extension only

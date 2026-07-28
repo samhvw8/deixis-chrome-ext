@@ -137,17 +137,17 @@ export interface SiteAdapter {
   /** Get injection point for annotation button on image container */
   getButtonInjectionPoint(image: HTMLImageElement): ButtonInjectionConfig | null;
 
-  /** Get injection point for lightbox/dialog button (optional) */
-  getLightboxInjectionPoint?(): ButtonInjectionConfig | null;
+  /** Lightbox/dialog support — both halves or neither (optional) */
+  lightbox?: {
+    getInjectionPoint(): ButtonInjectionConfig | null;
+    getImage(): HTMLImageElement | null;
+  };
 
   /** Watch for dynamically loaded images */
   observeImageChanges(callback: (images: AnnotatableImage[]) => void): () => void;
 
-  /** Site-specific image URL processing (optional) */
-  processImageUrl?(url: string): string | Promise<string>;
-
   /** Attach an image file directly to the site's chat input (optional) */
-  attachToChat?(file: File): boolean;
+  attachToChat?(file: File, promptText?: string): Promise<boolean>;
 }
 ```
 

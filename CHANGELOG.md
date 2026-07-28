@@ -3,6 +3,31 @@
 All notable changes to Deixis are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- Undo could run backwards: a toolbar edit applied by click left its gesture open, so its older snapshot landed on the history stack after a newer one
+- Returning to the page via the browser's Back button (bfcache) permanently disabled the extension in that tab — no annotate buttons and no chat attachment until a manual reload
+- Blur regions drifted off the content they redact after a window resize, and generated prompts named the wrong region for each annotation
+- Blur read past the edge of the canvas, darkening the rightmost and bottom blocks
+- Blur did up to 16× the per-frame pixel work after the source-resolution change, lagging strokes on large images
+- Releasing a key mid-drag split one toolbar slider drag into several undo steps; gestures interrupted by `pointercancel` or window blur were never closed
+- Diagnostic logs emitted during startup were dropped before the logging preference finished loading, including the adapter init message the adapter guide tells authors to look for
+- Annotations added while the image was still loading stayed invisible until the next edit
+- With `before`/`after` button placement, the first image's button suppressed injection for every sibling image under the same parent
+- Export failures were silent; they now explain that the site blocks reading the image and point to the right-click entry point, which does grant capture permission
+- The toolbar icon's tooltip shipped WXT's scaffold default, "Default Popup Title"
+
+### Changed
+- Undo history is capped at 50 steps
+- `SiteAdapter.getLightboxInjectionPoint()` and `getLightboxImage()` are replaced by a single optional `lightbox` object — the two were only ever valid together
+- `SiteAdapter.attachToChat()` is now async and resolves once the file is genuinely attached
+- Match patterns moved to an import-free module so the build config no longer pulls adapter runtime code into Node
+- Releases publish to 10% of users first, and the tag/version guard accepts prerelease tags
+
+### Removed
+- `SiteAdapter.processImageUrl()` — declared and documented but never called from any code path
+
 ## [0.6.0] - 2026-07-13
 
 ### Added

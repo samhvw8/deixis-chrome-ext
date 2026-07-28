@@ -7,9 +7,13 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { AnnotationOverlay } from './content/components/AnnotationOverlay';
-import { getAdapterForUrl } from '../src/core/adapters/registry';
+import { OverlayErrorBoundary } from './content/components/OverlayErrorBoundary';
+import { getAdapterForUrl, getAllMatches } from '../src/core/adapters/registry';
 import type { SiteAdapter } from '../src/core/adapters/types';
 import { createDeixisButton, DEIXIS_BUTTON_CLASS, getOverlayStyles } from '../src/core/ui';
+import { createLogger, initLogging } from '../src/core/logger';
+
+const logger = createLogger();
 
 // Container ID for Shadow DOM host
 const DEIXIS_CONTAINER_ID = 'deixis-annotation-root';
@@ -87,13 +91,17 @@ function openAnnotation(imageUrl: string, imageBounds?: DOMRect) {
     React.createElement(
       React.StrictMode,
       null,
-      React.createElement(AnnotationOverlay, {
-        imageUrl: imageUrl,
-        imageBounds: imageBounds,
-        onClose: closeAnnotation,
-        onCopy: handleCopy,
-        onSave: handleSave,
-      })
+      React.createElement(
+        OverlayErrorBoundary,
+        { onError: closeAnnotation },
+        React.createElement(AnnotationOverlay, {
+          imageUrl: imageUrl,
+          imageBounds: imageBounds,
+          onClose: closeAnnotation,
+          onCopy: handleCopy,
+          onSave: handleSave,
+        })
+      )
     )
   );
 }
@@ -124,17 +132,20 @@ async function handleCopy(dataUrl: string, promptText?: string) {
     await navigator.clipboard.write([
       new ClipboardItem({ 'image/png': blob })
     ]);
-    console.log('[Deixis] Copied to clipboard');
+    logger.log('Copied to clipboard');
 
     // Auto-attach to the site's chat input when the adapter supports it,
     // inserting the generated prompt text alongside the image.
     // (clipboard copy above remains the fallback if attaching fails)
     if (currentAdapter?.attachToChat) {
       const file = new File([blob], `deixis-annotation-${Date.now()}.png`, { type: 'image/png' });
-      currentAdapter.attachToChat(file, promptText);
+      const attached = await currentAdapter.attachToChat(file, promptText);
+      if (!attached) {
+        logger.warn('Adapter could not attach to the chat input — the clipboard copy stands');
+      }
     }
   } catch (error) {
-    console.error('[Deixis] Failed to copy to clipboard:', error);
+    logger.error('Failed to copy to clipboard:', error);
   }
 
   closeAnnotation();
@@ -161,12 +172,30 @@ function injectButtons() {
 
   const images = currentAdapter.findImages();
 
-  images.forEach(({ element, container }) => {
-    // Skip if already injected
-    if (container?.querySelector(`.${DEIXIS_BUTTON_CLASS}`)) return;
-
+  images.forEach(({ element }) => {
     const config = currentAdapter!.getButtonInjectionPoint(element);
     if (!config) return;
+
+    // Skip if already injected. Check the exact slot this button occupies, not
+    // just the parent: 'before'/'after' place it as a sibling of the container,
+    // so a parent-wide query would let the first image's button suppress every
+    // other image under the same parent.
+    const isInjected = (() => {
+      switch (config.position) {
+        case 'prepend':
+        case 'append':
+          return !!config.container.querySelector(`:scope > .${DEIXIS_BUTTON_CLASS}`);
+        case 'before':
+          return !!config.container.previousElementSibling?.classList.contains(
+            DEIXIS_BUTTON_CLASS
+          );
+        case 'after':
+          return !!config.container.nextElementSibling?.classList.contains(DEIXIS_BUTTON_CLASS);
+        default:
+          return false;
+      }
+    })();
+    if (isInjected) return;
 
     const button = createDeixisButton({
       // Read element.src live at click time, not a captured value — the button
@@ -203,16 +232,17 @@ function injectButtons() {
  * Inject button into lightbox/expansion dialog if adapter supports it
  */
 function injectLightboxButton() {
-  if (!currentAdapter?.getLightboxInjectionPoint) return;
+  const lightbox = currentAdapter?.lightbox;
+  if (!lightbox) return;
 
-  const lightboxConfig = currentAdapter.getLightboxInjectionPoint();
+  const lightboxConfig = lightbox.getInjectionPoint();
   if (!lightboxConfig) return;
 
   // Skip if already injected
-  if (lightboxConfig.container.querySelector(`.${DEIXIS_BUTTON_CLASS}`)) return;
+  if (lightboxConfig.container.querySelector(`:scope > .${DEIXIS_BUTTON_CLASS}`)) return;
 
-  // Find current lightbox image (site-specific selector)
-  const lightboxImg = document.querySelector('.expansion-dialog img, .cdk-overlay-pane img') as HTMLImageElement;
+  // The adapter owns the site-specific lightbox selector
+  const lightboxImg = lightbox.getImage();
   if (!lightboxImg?.src) return;
 
   const button = createDeixisButton({
@@ -228,19 +258,28 @@ function injectLightboxButton() {
 /**
  * Listen for custom events from the page
  */
-function setupEventListeners() {
-  // Listen for custom annotate event
-  window.addEventListener('deixis:annotate', ((e: CustomEvent) => {
+function setupEventListeners(): () => void {
+  const handleAnnotate = ((e: CustomEvent) => {
     if (e.detail?.imageSrc) {
       openAnnotation(e.detail.imageSrc);
     }
-  }) as EventListener);
+  }) as EventListener;
+
+  window.addEventListener('deixis:annotate', handleAnnotate);
+  return () => window.removeEventListener('deixis:annotate', handleAnnotate);
 }
 
 /**
  * Listen for messages from background script (context menu)
  */
+let messageListenerAttached = false;
+
 function setupMessageListener() {
+  // Registered once per JS context. initializeDeixis() can run again after a
+  // bfcache restore, and a second listener would open the overlay twice.
+  if (messageListenerAttached) return;
+  messageListenerAttached = true;
+
   browser.runtime.onMessage.addListener((message) => {
     if (message.type === 'DEIXIS_OPEN_ANNOTATION' && message.imageUrl) {
       openAnnotation(message.imageUrl);
@@ -255,12 +294,12 @@ function initializeDeixis() {
   const adapter = getAdapterForUrl(window.location.href);
 
   if (!adapter) {
-    console.warn('[Deixis] No adapter found for this site');
+    logger.warn('No adapter found for this site');
     return;
   }
 
   currentAdapter = adapter;
-  console.log(`[Deixis] Loaded adapter: ${adapter.name}`);
+  logger.log(`Loaded adapter: ${adapter.name}`);
 
   // Initialize adapter
   adapter.init();
@@ -275,7 +314,42 @@ function initializeDeixis() {
 
   // Setup message listeners
   setupMessageListener();
-  setupEventListeners();
+  const cleanupEventListeners = setupEventListeners();
+
+  // Tear everything down when the page goes away so the observer and the
+  // adapter don't outlive the document.
+  //
+  // A bfcache navigation does NOT re-run this script — it freezes and later
+  // resumes this same JS context. So teardown must not be one-shot: if the page
+  // is only being frozen (event.persisted), re-initialize on the matching
+  // pageshow instead of leaving the tab permanently without buttons.
+  const teardown = () => {
+    cleanupObserver?.();
+    cleanupObserver = null;
+    cleanupEventListeners();
+    adapter.destroy();
+    currentAdapter = null;
+  };
+
+  const handlePageHide = (event: PageTransitionEvent) => {
+    teardown();
+    if (!event.persisted) {
+      window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('pageshow', handlePageShow);
+    }
+  };
+
+  const handlePageShow = (event: PageTransitionEvent) => {
+    // Only a restore from bfcache needs re-initialization; the initial load
+    // already ran initializeDeixis().
+    if (!event.persisted) return;
+    window.removeEventListener('pagehide', handlePageHide);
+    window.removeEventListener('pageshow', handlePageShow);
+    initializeDeixis();
+  };
+
+  window.addEventListener('pagehide', handlePageHide);
+  window.addEventListener('pageshow', handlePageShow);
 
   // Notify background
   browser.runtime.sendMessage({
@@ -286,10 +360,13 @@ function initializeDeixis() {
 
 // Content script definition
 export default defineContentScript({
-  matches: ['https://gemini.google.com/*'],
+  // Derived from the adapter registry so adding an adapter doesn't require
+  // editing this file (or wxt.config.ts, which uses the same source).
+  matches: getAllMatches(),
 
   main() {
-    console.log('[Deixis] Content script loaded');
+    initLogging();
+    logger.log('Content script loaded');
     initializeDeixis();
   },
 });
